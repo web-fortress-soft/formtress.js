@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+    <!-- Configuration Bootstrap -->
+    <script id="formtress-bootstrap" type="text/javascript">
+        window.FormtressConfig = Object.freeze({
+            security: {
+                enabled: true,
+                patterns: {
+                    xss: { enabled: true },
+                    sql: { enabled: true },
+                    command: { enabled: true },
+                    prototyping: { enabled: true }
+                },
+                rateLimit: {
+                    enabled: true,
+                    windowMs: 60000,
+                    max: 5
+                },
+                csrf: {
+                    enabled: false,
+                    fieldName: '_csrf'
+                }
+            },
+            csp: {
+                enabled: true,
+                directives: {
+                    'default-src': ["'self'"],
+                    'script-src': ["'self'", "'strict-dynamic'"],
+                    'style-src': ["'self'", "'unsafe-inline'"],
+                    'img-src': ["'self'", 'data:', 'https:'],
+                    'connect-src': ["'self'"],
+                    'base-uri': ["'self'"],
+                    'form-action': ["'self'"],
+                    'object-src': ["'none'"]
+                }
+            },
+            validation: {
+                debounce: 300,
+                async: true
+            }
+        });
+    </script>
+<script src="src/js/formtress.js" defer></script>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formtress Auto-Config Testing</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        .success { color: #2e7d32; }
+        .error { color: #c62828; }
+    </style>
+</head>
+<body>
+    <h1>Formtress Auto-Config Testing</h1>
+
+    <!-- Test Form -->
+    <div class="test-section">
+        <h2>Test Form</h2>
+        <form id="testForm">
+            <input type="hidden" name="_csrf" value="1234567890">
+            <div>
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username">
+            </div>
+            <div>
+                <label for="email">Email:</label>
+                <input type="email" id="email" name="email">
+            </div>
+            <button type="submit">Submit</button>
+        </form>
+        <div id="formResult" class="result"></div>
+    </div>
+
+    <!-- Config Tests -->
+    <div class="test-section">
+        <h2>Configuration Tests</h2>
+        <button id="runTestsButton">Run Config Tests</button>
+        <div id="testResults" class="result"></div>
+    </div>
+
+
+    <!-- Load Formtress -->
+
+    <!-- Test Runner -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Form submission handler
+            document.getElementById('testForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const formResult = document.getElementById('formResult');
+                formResult.textContent = 'Form submitted with auto-config settings';
+            });
+
+            // Test runner
+            document.getElementById('runTestsButton').addEventListener('click', () => {
+                const results = [];
+                const testResults = document.getElementById('testResults');
+
+                // Clear previous results
+                while (testResults.firstChild) {
+                    testResults.removeChild(testResults.firstChild);
+                }
+
+                // Test 1: Config is frozen
+                results.push({
+                    name: 'Config is frozen',
+                    passed: Object.isFrozen(window.FormtressConfig),
+                    message: 'Checking if configuration is properly frozen'
+                });
+
+                // Test 2: Required security settings
+                const securitySettings = window.FormtressConfig?.security;
+                results.push({
+                    name: 'Required security settings',
+                    passed: securitySettings?.enabled === true && 
+                            securitySettings?.patterns?.xss?.enabled === true &&
+                            securitySettings?.patterns?.sql?.enabled === true &&
+                            securitySettings?.rateLimit?.enabled === true,
+                    message: 'Checking required security settings'
+                });
+
+                // Test 3: CSP enabled
+                results.push({
+                    name: 'CSP enabled',
+                    passed: window.FormtressConfig?.csp?.enabled === true,
+                    message: 'Checking if CSP is enabled'
+                });
+
+                // Display results safely
+                results.forEach((result, index) => {
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = result.passed ? 'success' : 'error';
+
+                    const titleStrong = document.createElement('strong');
+                    titleStrong.textContent = `${result.name}: `;
+
+                    const resultText = document.createTextNode(
+                        `${result.passed ? 'Passed' : 'Failed'}`
+                    );
+
+                    const lineBreak = document.createElement('br');
+
+                    const messageSmall = document.createElement('small');
+                    messageSmall.textContent = result.message;
+
+                    resultDiv.appendChild(titleStrong);
+                    resultDiv.appendChild(resultText);
+                    resultDiv.appendChild(lineBreak);
+                    resultDiv.appendChild(messageSmall);
+
+                    if (index > 0) {
+                        const hr = document.createElement('hr');
+                        testResults.appendChild(hr);
+                    }
+
+                    testResults.appendChild(resultDiv);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

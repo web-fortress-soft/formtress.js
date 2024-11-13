@@ -32,9 +32,9 @@
  * - Configuration Auto-Discovery
  * - Tampered Configuration Denial
  */
-
+(function() {    
 const Formtress = (() => {
-    
+    const AUTO_CONFIG_KEY = 'FormtressConfig';    
     // 1. Freeze core prototypes
     Object.freeze(Object.prototype);
     Object.freeze(Array.prototype);
@@ -246,7 +246,7 @@ const Formtress = (() => {
             onError: null
         },
         csp: {
-            enabled: true,
+            enabled: false,
             directives: {
                 'default-src': ["'self'"],
                 'script-src': ["'self'", "'strict-dynamic'"],
@@ -315,6 +315,42 @@ const Formtress = (() => {
             enabled: Boolean,
             fieldName: String,
             validateOnSubmit: Boolean
+        }
+    };
+    const ConfigLoader = {
+        getAutoConfig() {
+            try {
+                // Only accept configuration if it's frozen
+                const config = window[AUTO_CONFIG_KEY];
+                if (config && Object.isFrozen(config)) {
+                    return this.validateRequiredSettings(config);
+                }
+                return null;
+            } catch (error) {
+                console.warn('Formtress: Error loading auto-configuration:', error);
+                return null;
+            }
+        },
+    
+        validateRequiredSettings(config) {
+            // Verify required security settings
+            const requiredSettings = {
+                'security.enabled': true,
+                'security.patterns.xss.enabled': true,
+                'security.patterns.sql.enabled': true,
+                'security.rateLimit.enabled': true,
+                'csp.enabled': true
+            };
+    
+            for (const [path, expectedValue] of Object.entries(requiredSettings)) {
+                const value = path.split('.').reduce((obj, key) => obj?.[key], config);
+                if (value !== expectedValue) {
+                    console.warn(`Formtress: Required setting ${path} must be true`);
+                    return null;
+                }
+            }
+    
+            return config;
         }
     };
 
@@ -491,6 +527,8 @@ const Formtress = (() => {
     
         return result;
     };
+
+    
     // Error types
     class FormtressError extends Error {
         constructor(message, type) {
@@ -504,10 +542,85 @@ const Formtress = (() => {
     class SecurityCore {
         constructor(config) {
             this.violations = [];
-            this.csrfEnabled = false;
-            this.csrfFieldName = '_csrf';
             this.config = deepMerge(SECURITY_CONFIG, config);
             this.patterns = this.cloneSecurityPatterns(SECURITY_CONFIG.patterns);
+            
+            // Initialize CSRF settings
+            this.initializeCsrf(config?.csrf);
+        }
+
+        /**
+         * Initialize CSRF settings and detect existing tokens
+         * @param {Object} csrfConfig - CSRF configuration
+         */
+        initializeCsrf(csrfConfig = {}) {
+            this.csrfEnabled = csrfConfig?.enabled ?? false;
+            this.csrfFieldName = csrfConfig?.fieldName ?? '_csrf';
+            
+            // If CSRF is enabled but no field exists, we'll add one during form initialization
+            this.csrfDetected = false;
+        }
+
+        /**
+         * Detect existing CSRF token in form
+         * @param {HTMLFormElement} form - The form to check
+         * @returns {boolean} Whether CSRF token was detected
+         */
+        detectCsrf(form) {
+            if (!form || !(form instanceof HTMLFormElement)) return false;
+
+            // Check for existing CSRF input
+            const existingCsrf = form.querySelector(`input[name="${this.csrfFieldName}"]`);
+            if (existingCsrf) {
+                this.csrfDetected = true;
+                return true;
+            }
+
+            // Check for other common CSRF field names
+            const commonCsrfNames = [
+                '_csrf',
+                'csrf_token',
+                'csrf-token',
+                'csrfToken',
+                'csrfmiddlewaretoken', // Django
+                '_token',             // Laravel
+                '__RequestVerificationToken' // ASP.NET
+            ];
+
+            for (const name of commonCsrfNames) {
+                const field = form.querySelector(`input[name="${name}"]`);
+                if (field) {
+                    // Update our field name to match the detected one
+                    this.csrfFieldName = name;
+                    this.csrfDetected = true;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /**
+         * Validate CSRF
+         * @param {HTMLFormElement} form - The form to validate
+         * @returns {boolean} Whether the CSRF validation is successful
+         */
+        validateCsrf(form) {
+            // If CSRF is not enabled and not detected, skip validation
+            if (!this.csrfEnabled && !this.csrfDetected) {
+                return true;
+            }
+
+            const csrfToken = form.querySelector(`input[name="${this.csrfFieldName}"]`);
+            if (!csrfToken) {
+                throw new FormtressError('CSRF token is missing', 'csrf');
+            }
+            
+            if (!csrfToken.value) {
+                throw new FormtressError('CSRF token is empty', 'csrf');
+            }
+
+            return true;
         }
 
         /**
@@ -584,28 +697,6 @@ const Formtress = (() => {
                 .replace(new RegExp(/data:/gi), '')
                 .replace(new RegExp(/vbscript:/gi), '')
                 .replace(new RegExp(/on\w+=/gi), '');
-        }
-        /**
-         * Validate CSRF
-         * @param {HTMLElement} form - The form to validate
-         * @returns {boolean} Whether the CSRF validation is successful
-         */
-        validateCsrf(form) {
-            if (!this.csrfEnabled) {
-                console.warn('Formtress: CSRF protection is not enabled. Call enableCsrf() to enable it.');
-                return true;
-            }
-
-            const csrfToken = form.querySelector(`input[name="${this.csrfFieldName}"]`);
-            if (!csrfToken) {
-                throw new FormtressError('CSRF token is missing', 'csrf');
-            }
-            
-            if (!csrfToken.value) {
-                throw new FormtressError('CSRF token is empty', 'csrf');
-            }
-
-            return true;
         }
     }
 
@@ -750,15 +841,14 @@ const Formtress = (() => {
     class FormtressForm {
         
         constructor(form, customConfig = {}) {
-            const defaultConfig = {
-                validation: {   
-                    debounce: 300, // Default 300ms debounce
-                    async: true,
-                    ...customConfig.validation
-                }
-            };
-            // Merge custom config with defaults
-            const config = deepMerge(SECURITY_CONFIG, defaultConfig);
+            // Try to load auto-configuration
+            const autoConfig = ConfigLoader.getAutoConfig();
+            
+            // Merge configurations with priority
+            const config = deepMerge(
+                SECURITY_CONFIG,
+                deepMerge(autoConfig || {}, customConfig)
+            );
             
             const secureConfig = SecureFormtressConfigInjector.lockConfig(form, config);
             const secure = {
@@ -800,6 +890,9 @@ const Formtress = (() => {
             // Add necessary attributes
             form.setAttribute('novalidate', 'true');
             form.dataset.formtressSecured = 'true';
+
+            // Detect existing CSRF token
+            state.security.detectCsrf(form);
 
             // Initialize fields
             form.querySelectorAll('input, textarea, select').forEach(field => {
@@ -1110,11 +1203,11 @@ const Formtress = (() => {
                 mutations.forEach((mutation) => {
                     mutation.addedNodes.forEach((node) => {
                         if (node instanceof HTMLElement) {
-                            if (node.matches('input, textarea, select')) {
-                                this.initializeField(node);
+                            if (node.nodeName === 'FORM' && !node.dataset.formtressSecured) {
+                                this.secureForm(node);
                             }
-                            node.querySelectorAll('input, textarea, select')
-                                .forEach(field => this.initializeField(field));
+                            node.querySelectorAll('form:not([data-formtress-secured])')
+                                .forEach(form => this.secureForm(form));
                         }
                     });
                 });
@@ -1646,12 +1739,184 @@ const Formtress = (() => {
             return result;
         }
     }
+    /**
+     * CSP Core
+     */
+    class CSPCore {
+        // List of directives that only work with HTTP headers
+        static HEADER_ONLY_DIRECTIVES = new Set([
+            'frame-ancestors',
+            'report-uri',
+            'report-to',
+            'sandbox'
+        ]);
+
+        constructor(config) {
+            this.config = {
+                ...config,
+                directives: Object.fromEntries(
+                    Object.entries(config.directives).map(([key, value]) => [key, [...value]])
+                )
+            };
+            
+            this.nonce = this.generateNonce();
+            
+            if (this.config.enabled) {
+                this.applyCSP();
+                this.updateExistingScripts();
+            }
+        }
+    
+        generateNonce() {
+            // Generate a random nonce for CSP
+            const array = new Uint8Array(16);
+            crypto.getRandomValues(array);
+            return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+    
+        buildCSPString() {
+            const directives = this.config.directives;
+            const parts = [];
+    
+            for (const [directive, values] of Object.entries(directives)) {
+                // Skip directives that only work with HTTP headers
+                if (CSPCore.HEADER_ONLY_DIRECTIVES.has(directive)) {
+                    continue;
+                }
+
+                if (values.length > 0) {
+                    const directiveValues = [...values];
+                    if (directive === 'script-src' || directive === 'style-src') {
+                        directiveValues.push(`'nonce-${this.nonce}'`);
+                    }
+                    parts.push(`${directive} ${directiveValues.join(' ')}`);
+                } else if (values.length === 0 && directive !== 'report-uri') {
+                    parts.push(directive);
+                }
+            }
+    
+            return parts.join('; ');
+        }
+    
+        applyCSP() {
+            const cspString = this.buildCSPString();
+            const header = this.config.reportOnly ? 
+                'Content-Security-Policy-Report-Only' : 
+                'Content-Security-Policy';
+    
+            // Apply CSP via meta tag
+            const meta = document.createElement('meta');
+            meta.httpEquiv = header;
+            meta.content = cspString;
+            document.head.appendChild(meta);
+    
+            // Log information about header-only directives if they're present
+            const headerOnlyDirectives = Object.keys(this.config.directives)
+                .filter(directive => CSPCore.HEADER_ONLY_DIRECTIVES.has(directive));
+            
+            if (headerOnlyDirectives.length > 0) {
+                console.info(
+                    'Formtress CSP: The following directives require HTTP headers and will be ignored in meta tag:\n' +
+                    headerOnlyDirectives.join(', ') +
+                    '\nPlease configure these directives server-side.'
+                );
+            }
+    
+            // Set up violation reporting if a report-uri is configured
+            if (this.config.reportUri) {
+                document.addEventListener('securitypolicyviolation', (e) => {
+                    this.handleCSPViolation(e);
+                });
+            }
+        }
+    
+        handleCSPViolation(event) {
+            const violationReport = {
+                documentUri: event.documentURI,
+                violatedDirective: event.violatedDirective,
+                effectiveDirective: event.effectiveDirective,
+                originalPolicy: event.originalPolicy,
+                blockedUri: event.blockedURI,
+                lineNumber: event.lineNumber,
+                columnNumber: event.columnNumber,
+                sourceFile: event.sourceFile,
+                statusCode: event.statusCode,
+                timestamp: new Date().toISOString()
+            };
+    
+            // Send violation report
+            if (this.config.reportUri) {
+                fetch(this.config.reportUri, {
+                    method: 'POST',
+                    body: JSON.stringify({ 'csp-report': violationReport }),
+                    headers: { 'Content-Type': 'application/csp-report' }
+                }).catch(error => {
+                    console.error('Failed to send CSP violation report:', error);
+                });
+            }
+    
+            // Emit event for violation
+            const dispatchEvent = new CustomEvent('formtress:csp-violation', {
+                detail: violationReport
+            });
+            document.dispatchEvent(dispatchEvent);
+        }
+    
+        getNonce() {
+            return this.nonce;
+        }
+    
+        /**
+         * Update CSP configuration at runtime
+         * @param {Object} newConfig - New CSP configuration
+         */
+        updateConfig(newConfig) {
+            this.config = { ...this.config, ...newConfig };
+            if (this.config.enabled) {
+                this.applyCSP();
+                this.updateExistingScripts();
+            }
+        }
+    
+        /**
+         * Get current CSP configuration
+         * @returns {Object} Current CSP configuration
+         */
+        getConfig() {
+            return { ...this.config };
+        }
+
+        updateExistingScripts() {
+            // Update all inline scripts with the nonce
+            document.querySelectorAll('script:not([src])').forEach(script => {
+                script.nonce = this.nonce;
+            });
+        }
+
+        // Helper method to create new script elements with nonce
+        createScript(content) {
+            const script = document.createElement('script');
+            script.nonce = this.nonce;
+            script.textContent = content;
+            return script;
+        }
+    }
     // Global observer for automatic form discovery
     class FormtressObserver {
         constructor() {
-            this.startObserving();
-            this.secureExistingForms();
+            this.init();
         }
+        init() {
+            this.secureExistingForms();
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                this.startObserving();
+            });
+        } else {
+            this.startObserving();
+        }
+    }
         /**
          * Start observing the document for form changes
          */
@@ -1699,6 +1964,12 @@ const Formtress = (() => {
             }
         }
     }
+
+    /**
+     * Create a secure function
+     * @param {function} code - The function to secure
+     * @returns {function} The secure function
+     */
     const createSecureFunction = (code) => {
         const secureFunction = Function.prototype.bind.call(
             Function.prototype.call,
@@ -1712,7 +1983,12 @@ const Formtress = (() => {
         return secureFunction;
     };
     
-    
+    /**
+     * Debounce a function
+     * @param {function} func - The function to debounce
+     * @param {number} wait - The wait time in milliseconds
+     * @returns {function} The debounced function
+     */
     const debounce = (func, wait) => {
         let timeout;
         return function executedFunction(...args) {
@@ -1857,18 +2133,8 @@ const Formtress = (() => {
         }
     });
 })();
-// Add CSS for loading animation
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes formtress-spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-    .formtress-loading {
-        display: inline-block;
-    }
-`;
-document.head.appendChild(style);
+})();
+
 // Auto-initialize when the DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
