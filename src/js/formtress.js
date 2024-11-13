@@ -56,52 +56,149 @@ const Formtress = (() => {
                     /<\s*embed/gi.source,
                     /expression\s*\(/gi.source,
                     /url\s*\(/gi.source,
-                    /eval\s*\(/gi.source
+                    /eval\s*\(/gi.source,
+                    /alert\s*\(/gi.source,
+                    /prompt\s*\(/gi.source,
+                    /confirm\s*\(/gi.source,
+                    /Function\s*\(/gi.source,
+                    /setTimeout\s*\(/gi.source,
+                    /setInterval\s*\(/gi.source,
+                    /\[\s*["'].*["']\s*\]/gi.source,
+                    /\\x[0-9a-fA-F]{2}/gi.source,
+                    /\\u[0-9a-fA-F]{4}/gi.source
                 ],
-                description: 'XSS attempt detected'
+                description: 'XSS attempt detected1'
             },
             sql: {
                 patterns: [
-                    /\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE|MODIFY|TRUNCATE|EXEC|DECLARE)\b/gi.source,
-                    /'.*--/gi.source,
-                    /;\s*$/gi.source,
-                    /\/\*[\s\S]*?\*\//g.source,
-                    /\bOR\b\s*['"\d]/gi.source,
-                    /\bAND\b\s*['"\d]/gi.source
+                    /\b(SELECT|INSERT|UPDATE|DELETE)\s+\w+\s+(?:FROM|INTO|WHERE)\b/gi.source,
+                    /\b(DROP|ALTER|CREATE|TRUNCATE)\s+(?:TABLE|DATABASE|INDEX)\b/gi.source,
+                    
+                    // UNION attacks - with specific context
+                    /\bUNION\s+(?:ALL\s+)?SELECT\b/gi.source,
+                    
+                    // Comments - in SQL context
+                    /;\s*--[\s\S]*$/gi.source,        // End of line comment
+                    /;\s*#[\s\S]*$/gi.source,         // MySQL comment
+                    /;\s*\/\*[\s\S]*?\*\//g.source,   // Multi-line comment
+                    
+                    // Logic-based - with specific context
+                    /'\s*(?:OR|AND)\s*'?\d+['"]?\s*=\s*['"]?\d+/gi.source,
+                    /"\s*(?:OR|AND)\s*"?\d+['"]?\s*=\s*['"]?\d+/gi.source,
+                    
+                    // Stacked queries - with specific context
+                    /;\s*(?:SELECT|INSERT|UPDATE|DELETE)\b/gi.source,
+                    
+                    // Function calls - with word boundaries
+                    /\b(?:CONCAT|CHAR|SLEEP|BENCHMARK)\s*\(/gi.source,
+                    
+                    // System stored procedures - with specific context
+                    /\b(?:xp_cmdshell|sp_executesql|sp_addlogin)\b/gi.source,
+                    
+                    // Time-based - with specific context
+                    /\bWAITFOR\s+DELAY\b/gi.source,
+                    /\bpg_sleep\s*\(/gi.source,
+                    
+                    // String concatenation - in SQL context
+                    /'\s*\+\s*'/gi.source,
+                    /'\s*\|\|\s*'/gi.source
                 ],
                 description: 'SQL injection attempt detected'
             },
             prototype: {
                 patterns: [
-                    /__proto__/g.source,
-                    /constructor\s*\./g.source,
-                    /prototype\s*\./g.source,
-                    /Object\.assign/g.source,
-                    /Object\.defineProperty/g.source,
-                    /Object\.setPrototypeOf/g.source
+                    // Property access - with word boundaries and specific context
+                    /(?:\[|\.)\s*["']?__proto__["']?\s*(?:\]|\s*=)/g.source,
+                    /(?:\[|\.)\s*["']?constructor["']?\s*(?:\]|\s*=)/g.source,
+                    /(?:\[|\.)\s*["']?prototype["']?\s*(?:\]|\s*=)/g.source,
+                    
+                    // Object methods - with word boundaries and function call context
+                    /\bObject\.assign\s*\(/g.source,
+                    /\bObject\.defineProperty\s*\(/g.source,
+                    /\bObject\.setPrototypeOf\s*\(/g.source,
+                    /\bObject\.create\s*\(/g.source,
+                    
+                    // Function constructors - with specific context
+                    /\bnew\s+Function\s*\(/g.source,
+                    /\bFunction\s*\(\s*["']/g.source,
+                    
+                    // Dangerous assignments - with specific context
+                    /\.\s*__proto__\s*=\s*/g.source,
+                    /\.\s*constructor\s*=\s*/g.source,
+                    /\.\s*prototype\s*=\s*/g.source,
+                    
+                    // Reflect operations - with word boundaries
+                    /\bReflect\.set\s*\(/g.source,
+                    /\bReflect\.defineProperty\s*\(/g.source,
+                    /\bReflect\.setPrototypeOf\s*\(/g.source
                 ],
                 description: 'Prototype pollution attempt detected'
             },
             path: {
                 patterns: [
-                    /\.\.\//g.source,
-                    /\.\.\\/g.source,
-                    /~\//g.source,
-                    /\/etc\//g.source,
-                    /\/proc\//g.source,
-                    /\/sys\//g.source,
-                    /\/var\/log\//g.source
+                    /(?:^|[\\/])\.\.\//g.source,  // Only match ../ in path context
+                    /(?:^|[\\/])\.\.\\/g.source,  // Only match ..\ in path context
+                    
+                    // URL encoded - more specific context
+                    /(?:\?|&|;).*\.\.%2f/gi.source,  // Match in URL parameters
+                    /(?:\?|&|;).*\.\.%5c/gi.source,  // Match in URL parameters
+                    
+                    // Double-encoded - in URL context
+                    /(?:\?|&|;).*%252e%252e%252f/gi.source,
+                    /(?:\?|&|;).*%252e%252e%255c/gi.source,
+                    
+                    // Critical system paths - with boundaries
+                    /(?:^|[\\/])(?:etc|proc|sys|var|usr|opt)[\\/]/g.source,
+                    
+                    // Windows specific - with boundaries
+                    /\b[A-Za-z]:\\(?:Windows|System32|Program Files)/gi.source,
+                    
+                    // Sensitive files - with boundaries and context
+                    /(?:^|[\\/])(?:\.htaccess|web\.config|\.env|\.git)[\\/]?$/gi.source,
+                    
+                    // Null byte - in specific contexts
+                    /%00(?:\.|\/).*$/g.source,
+                    /\0(?:\.|\/).*$/g.source,
+                    
+                    // Mixed traversal - with context
+                    /(?:^|[\\/])\.\.[\\/]{2,}/g.source,  // Multiple slashes after traversal
+                    
+                    // Web roots - with boundaries
+                    /(?:^|[\\/])(?:www|htdocs|public_html)[\\/]/g.source
                 ],
                 description: 'Path traversal attempt detected'
             },
             command: {
                 patterns: [
-                    /\$\([^)]*\)/g.source,
-                    /`[^`]*`/g.source,
-                    /system\(/g.source,
-                    /exec\(/g.source,
-                    /shell_exec\(/g.source,
-                    /passthru\(/g.source
+                    /\$\([^)]*\)/g.source,           // $(command)
+                    /`[^`]*`/g.source,               // `command`
+                    
+                    // System function calls - with word boundaries
+                    /\bsystem\(/g.source,
+                    /\bexec\(/g.source,
+                    /\bshell_exec\(/g.source,
+                    /\bpopen\(/g.source,
+                    /\bproc_open\(/g.source,
+                    /\bpcntl_exec\(/g.source,
+                    
+                    // Command chaining - with specific context
+                    /\s*;\s*[a-zA-Z]/g.source,       // ; followed by command
+                    /\s*\|\s*[a-zA-Z]/g.source,      // | followed by command
+                    /\s*&&\s*[a-zA-Z]/g.source,      // && followed by command
+                    /\s*\|\|\s*[a-zA-Z]/g.source,    // || followed by command
+                    
+                    // Variable substitution - with specific context
+                    /\$\{[^}]*\}/g.source,           // ${var}
+                    
+                    // Redirection - with specific context
+                    />\s*[a-zA-Z0-9]/g.source,       // > followed by output
+                    /<\s*[a-zA-Z0-9]/g.source,       // < followed by input
+                    /2>\s*[a-zA-Z0-9]/g.source,      // 2> followed by error output
+                    
+                    // Environment variables - with specific context
+                    /\$ENV\[/g.source,               // $ENV[
+                    /\$_[A-Z]+\[/g.source,           // $_GET[, $_POST[, etc.
+                    /%[A-Z]+%/g.source               // %PATH%, %HOME%, etc.
                 ],
                 description: 'Command injection attempt detected'
             }
@@ -145,6 +242,27 @@ const Formtress = (() => {
             beforeSubmit: null,
             afterSubmit: null,
             onError: null
+        },
+        csp: {
+            enabled: true,
+            directives: {
+                'default-src': ["'self'"],
+                'script-src': ["'self'", "'strict-dynamic'"],
+                'style-src': ["'self'", "'unsafe-inline'"],
+                'img-src': ["'self'", 'data:', 'https:'],
+                'font-src': ["'self'"],
+                'connect-src': ["'self'"],
+                'frame-src': ["'none'"],
+                'object-src': ["'none'"],
+                'base-uri': ["'self'"],
+                'form-action': ["'self'"],
+                'frame-ancestors': ["'none'"],
+                'upgrade-insecure-requests': [],
+                'block-all-mixed-content': [],
+                'require-trusted-types-for': ["'script'"]
+            },
+            reportOnly: false,
+            reportUri: '/csp-report'
         }
     };
     // Configuration schema for validation
@@ -463,8 +581,7 @@ const Formtress = (() => {
                 .replace(new RegExp(/javascript:/gi), '')
                 .replace(new RegExp(/data:/gi), '')
                 .replace(new RegExp(/vbscript:/gi), '')
-                .replace(new RegExp(/on\w+=/gi), '')
-                .trim();
+                .replace(new RegExp(/on\w+=/gi), '');
         }
         /**
          * Validate CSRF
@@ -649,11 +766,20 @@ const Formtress = (() => {
                 rateLimiter: config.rateLimit.enabled ? new RateLimiter(config.rateLimit) : null,
                 fields: new Map(),
                 lastSubmit: 0,
+                csp: new CSPCore(config.csp),
                 debouncedValidations: new Map() // Store debounced functions per field
             };
             
             privateStore.set(this, secure);
             this.initializeForm();
+        }
+        /**
+         * Get the CSP nonce
+         * @returns {string} The CSP nonce
+         */
+        getCSPNonce() {
+            const state = privateStore.get(this);
+            return state.csp.getNonce();
         }
         /**
          * Get the current configuration
@@ -1029,8 +1155,7 @@ const Formtress = (() => {
                 .replace(/javascript:/gi, '')
                 .replace(/data:/gi, '')
                 .replace(/vbscript:/gi, '')
-                .replace(/on\w+=/gi, '')
-                .trim();
+                .replace(/on\w+=/gi, '');
         }
         /**
          * Validate a URL
@@ -1471,8 +1596,7 @@ const Formtress = (() => {
                 .replace(/javascript:/gi, '')
                 .replace(/data:/gi, '')
                 .replace(/vbscript:/gi, '')
-                .replace(/on\w+=/gi, '')
-                .trim();
+                .replace(/on\w+=/gi, '');
         }
         /**
          * Relaxed sanitization
@@ -1487,8 +1611,7 @@ const Formtress = (() => {
                 .replace(/on\w+="[^"]*"/gi, '')
                 .replace(/javascript:/gi, '')
                 .replace(/data:/gi, '')
-                .replace(/vbscript:/gi, '')
-                .trim();
+                .replace(/vbscript:/gi, '');
         }
         /**
          * Custom sanitization
