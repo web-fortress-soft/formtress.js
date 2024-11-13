@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>AutoFormtress Observer Demo</title>
-    <script src="src/js/formtress.js" defer></script>
+    <script src="src/js/formtress.mini.js" defer></script>
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
@@ -75,23 +75,6 @@
     <div id="dynamicForms"></div>
 
     <script>
-        
-        // Add an event listener to handle formtress:info events
-        document.addEventListener('formtress:info', (message) => {
-            // Handle the info (e.g., display a message to the user, log it, etc.)
-            console.info('Formtress Info:', message.detail.message);
-        });
-        // Add an event listener to handle formtress:warning events
-        document.addEventListener('formtress:warning', (message) => {
-            // Handle the warning (e.g., display a message to the user, log it, etc.)
-            console.warn('Formtress Warning:', message);
-        });
-        // Add an event listener to handle formtress:error events
-        document.addEventListener('formtress:error', (message, error) => {
-            const errorInfo = event.detail.error;
-            // Handle the error (e.g., display a message to the user, log it, etc.)
-            console.error('Formtress Error:', message, errorInfo);
-        });
         // Initialize AutoFormtress - it automatically starts securing forms
         // No manual initialization needed!
 
