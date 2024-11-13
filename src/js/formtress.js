@@ -29,6 +29,8 @@
  * - Private key symbol
  * - Configuration object
  * - Security patterns object
+ * - Configuration Auto-Discovery
+ * - Tampered Configuration Denial
  */
 
 const Formtress = (() => {
