@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AutoFormtress Observer Demo</title>
+    <script src="src/js/formtress.mini.js" defer></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button {
+            background: #ff4444;
+        }
+        #dynamicForms {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>AutoFormtress Observer Demo</h1>
+    
+    <!-- Existing form -->
+    <form id="existingForm">
+        <h3>Existing Form</h3>
+        <input type="hidden" name="_csrf" value="aUonasd0&Ukjasdu09snlaksd">
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" required>
+        </div>
+        <button type="submit">Submit</button>
+    </form>
+
+    <!-- Controls for testing -->
+    <div>
+        <h3>Test Controls</h3>
+        <button onclick="addDynamicForm()">Add New Form</button>
+        <button onclick="addFieldToExisting()">Add Field to Existing Form</button>
+        <button class="test-button" onclick="testXSSAttack()">Test XSS Attack</button>
+        <button class="test-button" onclick="testSQLInjection()">Test SQL Injection</button>
+    </div>
+
+    <!-- Container for dynamic forms -->
+    <div id="dynamicForms"></div>
+
+    <script>
+        // Initialize AutoFormtress - it automatically starts securing forms
+        // No manual initialization needed!
+
+        // Function to add a new dynamic form
+        function addDynamicForm() {
+            const formHtml = `
+                <form>
+                    <h3>Dynamic Form ${document.querySelectorAll('form').length + 1}</h3>
+                    <input type="hidden" name="_csrf" value="aUonasd0&Ukjasdu09nlaksd">
+                    <div class="form-group">
+                        <label>Name:</label>
+                        <input type="text" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Message:</label>
+                        <textarea name="message"></textarea>
+                    </div>
+                    <button type="submit">Submit</button>
+                </form>
+            `;
+            
+            document.getElementById('dynamicForms').insertAdjacentHTML('beforeend', formHtml);
+        }
+
+        // Function to add a field to existing form
+        function addFieldToExisting() {
+            const fieldHtml = `
+                <div class="form-group">
+                    <label>Dynamic Field:</label>
+                    <input type="text" name="dynamic${Date.now()}" required>
+                </div>
+            `;
+            
+            document.getElementById('existingForm')
+                .querySelector('button')
+                .insertAdjacentHTML('beforebegin', fieldHtml);
+        }
+
+        // Function to test XSS attack
+        function testXSSAttack() {
+            const forms = document.querySelectorAll('form');
+            forms.forEach(form => {
+                const input = form.querySelector('input');
+                if (input) {
+                    input.value = "<script>alert('XSS')<\/script>";
+                    input.dispatchEvent(new Event('input'));
+                }
+            });
+        }
+
+        // Function to test SQL injection
+        function testSQLInjection() {
+            const forms = document.querySelectorAll('form');
+            forms.forEach(form => {
+                const input = form.querySelector('input');
+                if (input) {
+                    input.value = "' OR '1'='1";
+                    input.dispatchEvent(new Event('input'));
+                }
+            });
+        }
+    </script>
+</body>
+</html>
