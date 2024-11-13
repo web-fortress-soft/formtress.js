@@ -194,7 +194,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Security 🔒
 
-Found a security issue? Please email security@yourdomain.com or submit it through our bug bounty program.
+Found a security issue? Please email web-formtress-sort@gmail.com or submit it through our bug bounty program.
 
 ---
 
