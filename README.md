@@ -1,6 +1,6 @@
 # Formtress.js 🛡️
 
-## It's not your choice which security vulnerability to address. Your only option is ALL.
+> Millitary-grade form and DOM security with focus on DX.
 <br />
 
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/yourusername/formtress)
@@ -8,9 +8,9 @@
 
 
 
-> Enterprise-grade form security made simple.
+## It's not your choice which security vulnerability to address. Your only option is ALL.
 
-formtress.js is an advanced, enterprise-grade, unobtrusive, security-focused, multi-layer form utility library that automatically protects your forms against common and advanced web vulnerabilities. It provides comprehensive security features on its default state, while maintaining full flexibility for customization. It also includes self defense mechanisms to prevent security level degradation, prototyping and instance access.
+formtress.js is an advanced, enterprise-grade, unobtrusive, security-focused form utility library that automatically protects your forms and DOM against common and advanced web vulnerabilities. It provides comprehensive security features on its default state, while maintaining full flexibility for customization. It also includes self defense mechanisms to prevent security level degradation, prototyping and instance access.
 
 ## Features 🚀
 
