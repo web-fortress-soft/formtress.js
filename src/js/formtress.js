@@ -47,63 +47,102 @@ const Formtress = (() => {
     const SECURITY_CONFIG = {
         patterns: {
             xss: {
+                minLength: 10,
                 patterns: [
-                    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.source,
-                    /javascript:/gi.source,
-                    /data:/gi.source,
-                    /vbscript:/gi.source,
-                    /on\w+\s*=/gi.source,
-                    /<\s*iframe/gi.source,
-                    /<\s*object/gi.source,
-                    /<\s*embed/gi.source,
-                    /expression\s*\(/gi.source,
-                    /url\s*\(/gi.source,
-                    /eval\s*\(/gi.source,
-                    /alert\s*\(/gi.source,
-                    /prompt\s*\(/gi.source,
-                    /confirm\s*\(/gi.source,
-                    /Function\s*\(/gi.source,
-                    /setTimeout\s*\(/gi.source,
-                    /setInterval\s*\(/gi.source,
-                    /\[\s*["'].*["']\s*\]/gi.source,
-                    /\\x[0-9a-fA-F]{2}/gi.source,
-                    /\\u[0-9a-fA-F]{4}/gi.source
+                    /(?=.{10,}).*<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.source,
+                    /(?=.{10,}).*javascript:/gi.source,
+                    /(?=.{10,}).*data:\s*text\/html/gi.source,
+                    /(?=.{10,}).*vbscript:/gi.source,
+                    /(?=.{10,}).*on(?:load|error|click|mouse|focus)\s*=/gi.source,
+                    /(?=.{10,}).*<\s*iframe[^>]*src\s*=/gi.source,
+                    /(?=.{10,}).*<\s*object[^>]*data\s*=/gi.source,
+                    /(?=.{10,}).*<\s*embed[^>]*src\s*=/gi.source,
+                    /(?=.{10,}).*expression\s*\(\s*.*\)/gi.source,
+                    /(?=.{10,}).*url\s*\(\s*['"]*javascript:/gi.source,
+                    /(?=.{10,}).*(?:^|\s|[({])eval\s*\(/gi.source,
+                    /(?=.{10,}).*(?:^|\s|[({])(?:alert|prompt|confirm)\s*\(/gi.source,
+                    /(?=.{10,}).*new\s+Function\s*\(/gi.source,
+                    /(?=.{10,}).*(?:set|clear)(?:Timeout|Interval)\s*\(\s*['"`]/gi.source,
+                    /(?=.{10,}).*<[a-zA-Z][^>]*>/gi.source,
+                    /(?=.{10,}).*\\x(?:00|22|27)/gi.source,
+                    /(?=.{10,}).*\\u(?:0000|0022|0027)/gi.source
                 ],
-                description: 'XSS attempt detected1'
+                description: 'XSS attempt detected'
+            },
+            php: {
+                patterns: [
+                    /(?=.{10,}).*<\?php/gi.source,      // PHP opening tag
+                    /(?=.{10,}).*<\?=/gi.source,        // PHP short echo tag
+                    /(?=.{10,}).*phpinfo\s*\(/gi.source,  // phpinfo() call
+                    /(?=.{10,}).*system\s*\(/gi.source,   // system() call
+                    /(?=.{10,}).*exec\s*\(/gi.source,     // exec() call
+                    /(?=.{10,}).*shell_exec\s*\(/gi.source, // shell_exec() call
+                    /(?=.{10,}).*passthru\s*\(/gi.source,  // passthru() call
+                    /(?=.{10,}).*eval\s*\(/gi.source      // eval() call
+                ],
+                description: 'PHP injection attempt detected'
+            },
+            python: {
+                patterns: [
+                    /(?=.{10,}).*import\s+os/gi.source,     // OS operations
+                    /(?=.{10,}).*subprocess\./gi.source,    // Subprocess calls
+                    /(?=.{10,}).*exec\(/gi.source,          // Python exec
+                    /(?=.{10,}).*eval\(/gi.source,          // Python eval
+                    /(?=.{10,}).*open\(/gi.source,          // File operations
+                    /(?=.{10,}).*__import__/gi.source       // Dynamic imports
+                ],
+                description: 'Python injection attempt detected'
+            },
+            ruby: {
+                patterns: [
+                    /(?=.{10,}).*`.*`/gi.source,           // Command execution
+                    /(?=.{10,}).*system\(/gi.source,       // System calls
+                    /(?=.{10,}).*eval\(/gi.source,         // Ruby eval
+                    /(?=.{10,}).*File\./gi.source,         // File operations
+                    /(?=.{10,}).*IO\./gi.source            // IO operations
+                ],
+                description: 'Ruby injection attempt detected'
+            },
+            java: {
+                patterns: [
+                    /(?=.{10,}).*Runtime\.getRuntime\(\)/gi.source,  // Runtime execution
+                    /(?=.{10,}).*ProcessBuilder/gi.source,           // Process creation
+                    /(?=.{10,}).*System\.exit/gi.source,             // System operations
+                    /(?=.{10,}).*Class\.forName/gi.source            // Dynamic class loading
+                ],
+                description: 'Java injection attempt detected'
+            },
+            csharp: {
+                patterns: [
+                    /(?=.{10,}).*Process\.Start/gi.source,           // Process execution
+                    /(?=.{10,}).*Assembly\.Load/gi.source,           // Assembly loading
+                    /(?=.{10,}).*System\.Diagnostics/gi.source,      // System operations
+                    /(?=.{10,}).*System\.Reflection/gi.source        // Reflection
+                ],
+                description: 'C# injection attempt detected'
+            },
+            shell: {
+                patterns: [
+                    /(?=.{10,}).*\$\([^)]*\)/g.source,           // $(command)
+                    /(?=.{10,}).*`[^`]*`/g.source,               // `command`
+                    /(?=.{10,}).*\|\s*[a-zA-Z]/g.source,         // pipe operations
+                    /(?=.{10,}).*&&\s*[a-zA-Z]/g.source,         // command chaining
+                    /(?=.{10,}).*>\s*[a-zA-Z0-9]/g.source,       // output redirection
+                    /(?=.{10,}).*<\s*[a-zA-Z0-9]/g.source,       // input redirection
+                    /(?=.{10,}).*;\s*[a-zA-Z]/g.source           // command separation
+                ],
+                description: 'Shell command injection attempt detected'
             },
             sql: {
                 patterns: [
-                    /\b(SELECT|INSERT|UPDATE|DELETE)\s+\w+\s+(?:FROM|INTO|WHERE)\b/gi.source,
-                    /\b(DROP|ALTER|CREATE|TRUNCATE)\s+(?:TABLE|DATABASE|INDEX)\b/gi.source,
-                    
-                    // UNION attacks - with specific context
-                    /\bUNION\s+(?:ALL\s+)?SELECT\b/gi.source,
-                    
-                    // Comments - in SQL context
-                    /;\s*--[\s\S]*$/gi.source,        // End of line comment
-                    /;\s*#[\s\S]*$/gi.source,         // MySQL comment
-                    /;\s*\/\*[\s\S]*?\*\//g.source,   // Multi-line comment
-                    
-                    // Logic-based - with specific context
-                    /'\s*(?:OR|AND)\s*'?\d+['"]?\s*=\s*['"]?\d+/gi.source,
-                    /"\s*(?:OR|AND)\s*"?\d+['"]?\s*=\s*['"]?\d+/gi.source,
-                    
-                    // Stacked queries - with specific context
-                    /;\s*(?:SELECT|INSERT|UPDATE|DELETE)\b/gi.source,
-                    
-                    // Function calls - with word boundaries
-                    /\b(?:CONCAT|CHAR|SLEEP|BENCHMARK)\s*\(/gi.source,
-                    
-                    // System stored procedures - with specific context
-                    /\b(?:xp_cmdshell|sp_executesql|sp_addlogin)\b/gi.source,
-                    
-                    // Time-based - with specific context
-                    /\bWAITFOR\s+DELAY\b/gi.source,
-                    /\bpg_sleep\s*\(/gi.source,
-                    
-                    // String concatenation - in SQL context
-                    /'\s*\+\s*'/gi.source,
-                    /'\s*\|\|\s*'/gi.source
+                    /(?=.{10,}).*SELECT.+FROM/gi.source,         // SELECT queries
+                    /(?=.{10,}).*INSERT.+INTO/gi.source,         // INSERT statements
+                    /(?=.{10,}).*UPDATE.+SET/gi.source,          // UPDATE statements
+                    /(?=.{10,}).*DELETE.+FROM/gi.source,         // DELETE statements
+                    /(?=.{10,}).*DROP.+TABLE/gi.source,          // DROP operations
+                    /(?=.{10,}).*UNION.+SELECT/gi.source,        // UNION attacks
+                    /(?=.{10,}).*--[\s\S]*$/gi.source,          // SQL comments
+                    /(?=.{10,}).*\/\*[\s\S]*?\*\//g.source      // Multi-line comments
                 ],
                 description: 'SQL injection attempt detected'
             },
@@ -653,14 +692,18 @@ const Formtress = (() => {
          * @param {string} type - The type of input
          * @returns {boolean} Whether the input is valid
          */
-        validateInput(value, type = 'text') {
+           validateInput(value, type = 'text') {
             if (typeof value !== 'string') {
                 value = String(value);
             }
 
             // Check for security violations using cloned patterns
             for (const [key, pattern] of Object.entries(this.patterns)) {
-                // Create fresh RegExp instances for each test to avoid lastIndex issues
+                // Skip XSS check if string length is less than minLength
+                if (key === 'xss' && value.length < (this.config.patterns.xss.minLength || 10)) {
+                    continue;
+                }
+
                 const patterns = pattern.patterns.map(p => 
                     p instanceof RegExp ? new RegExp(p.source, p.flags) : new RegExp(p)
                 );
@@ -690,13 +733,19 @@ const Formtress = (() => {
                 return value;
             }
 
-            // Use fresh RegExp instances for each replacement
-            return value
-                .replace(new RegExp(/[<>]/g), '')
-                .replace(new RegExp(/javascript:/gi), '')
-                .replace(new RegExp(/data:/gi), '')
-                .replace(new RegExp(/vbscript:/gi), '')
-                .replace(new RegExp(/on\w+=/gi), '');
+            // Only sanitize if string length is >= minLength (10 chars)
+            if (value.length >= this.config.patterns.xss.minLength) {
+                return value
+                    // Only replace < > when they're part of HTML-like patterns
+                    .replace(/<script|<iframe|<embed|<object/gi, '') // Only catch dangerous HTML tags
+                    .replace(/javascript:/gi, '')
+                    .replace(/data:\s*text\/html/gi, '')
+                    .replace(/vbscript:/gi, '')
+                    .replace(/on(?:load|error|click|mouse|focus)\s*=/gi, '');
+            }
+
+            // Return original value for short strings
+            return value;
         }
     }
 
@@ -1099,7 +1148,6 @@ const Formtress = (() => {
                 return { success: false, error: error.message };
             }
         }
-
         /**
          * Show the result of a validation
          * @param {HTMLElement} container - The container to show the result in
@@ -1110,18 +1158,40 @@ const Formtress = (() => {
             const state = privateStore.get(this);
             const config = state.config.feedback;
             
-            container.className = `formtress-result formtress-${type}`;
+            // Add transition styles if not already present
+            container.style.transition = 'all 0.3s ease-in-out';
+            container.style.opacity = '0';
             
-            if (type === 'loading') {
-                container.textContent = '⟳';
-                container.style.color = '#666';
-                // Add loading animation
-               //container.style.animation = 'formtress-spin 1s linear infinite';
-                return;
-            }
-            container.className = `formtress-result formtress-${type}`;
-            container.textContent = type === 'success' ? '✓' : `✗ ${message}`;
-            container.style.color = type === 'success' ? '#4CAF50' : '#ff4444';
+            // Use setTimeout to ensure the opacity transition is visible
+            setTimeout(() => {
+                container.className = `formtress-result formtress-${type}`;
+                
+                if (type === 'loading') {
+                    container.textContent = '⟳';
+                    container.style.color = '#666';
+                    container.style.animation = 'formtress-spin 1s linear infinite';
+                    
+                    // Add keyframes for spin animation if not already present
+                    if (!document.querySelector('#formtress-spin-keyframes')) {
+                        const keyframes = document.createElement('style');
+                        keyframes.id = 'formtress-spin-keyframes';
+                        keyframes.textContent = `
+                            @keyframes formtress-spin {
+                                from { transform: rotate(0deg); }
+                                to { transform: rotate(360deg); }
+                            }
+                        `;
+                        document.head.appendChild(keyframes);
+                    }
+                } else {
+                    container.style.animation = 'none';
+                    container.className = `formtress-result formtress-${type}`;
+                    container.textContent = type === 'success' ? config.successSymbol : `${config.errorSymbol} ${message}`;
+                    container.style.color = type === 'success' ? config.successColor : config.errorColor;
+                }
+                
+                container.style.opacity = '1';
+            }, 50);
         }
         /**
          * Destroy the form
