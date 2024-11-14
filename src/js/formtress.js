@@ -6,7 +6,7 @@
  * Features:
  * - Automatic form discovery and protection
  * - Grade A security
- * - XSS, SQL Injection, CSRF protection
+ * - XSS, SQL Injection, CSRF, CSP, PHP, Python, Ruby, Java, C#, Shell, Command, Prototype, Path, protection
  * - Input validation and sanitization
  * - Rate limiting
  * - Event monitoring
@@ -31,6 +31,16 @@
  * - Security patterns object
  * - Configuration Auto-Discovery
  * - Tampered Configuration Denial
+ * - Debugger Trap
+ * - Performance Trap
+ * - DevTools Detection
+ * - Exhaustive Error Handling
+ * - Security check interval
+ * - Fetch and XHR override protection
+ * - CSP and CORS protection
+ * - Secure configuration loading
+ * - Remote configuration loading
+ * - Configuration Signature Validation 
  */
 (function() {    
 const Formtress = (() => {
@@ -42,8 +52,15 @@ const Formtress = (() => {
     const privateStore = new WeakMap();
     const securedForms = new WeakSet();
     const PRIVATE_KEY = Symbol('formtressPrivate');
-
-    // Security patterns and configurations
+    const INIT_TIMEOUT = (() => {
+        // Random timeout between 8-12 seconds
+        const baseTimeout = 10000;
+        const variance = 2000;
+        return baseTimeout + (Math.random() * variance * 2 - variance);
+    })();
+    /**
+     * Extensive security patterns and configurations
+     */
     const SECURITY_CONFIG = {
         patterns: {
             xss: {
@@ -242,6 +259,26 @@ const Formtress = (() => {
                     /%[A-Z]+%/g.source               // %PATH%, %HOME%, etc.
                 ],
                 description: 'Command injection attempt detected'
+            },
+            ajax: {
+                patterns: [
+                    // Fetch API patterns
+                    /(?=.{10,}).*fetch\s*\(\s*['"`][^'"`]*['"`]\s*\)/gi.source,
+                    /(?=.{10,}).*fetch\s*\(\s*window\./gi.source,
+                    /(?=.{10,}).*fetch\s*\(\s*location\./gi.source,
+                    /(?=.{10,}).*fetch\s*\(\s*document\./gi.source,
+                    
+                    // XMLHttpRequest patterns
+                    /(?=.{10,}).*new\s+XMLHttpRequest\s*\(\s*\)/gi.source,
+                    /(?=.{10,}).*\.open\s*\(\s*['"`][^'"`]*['"`]\s*,/gi.source,
+                    /(?=.{10,}).*\.send\s*\(\s*.*\)/gi.source,
+                    
+                    // Common attack patterns
+                    /(?=.{10,}).*\.(responseText|responseXML|response)\s*=/gi.source,
+                    /(?=.{10,}).*\.(onreadystatechange|onload|onerror)\s*=/gi.source,
+                    /(?=.{10,}).*\.(withCredentials|timeout)\s*=/gi.source
+                ],
+                description: 'AJAX injection attempt detected'
             }
         },
         validation: {
@@ -357,9 +394,9 @@ const Formtress = (() => {
         }
     };
     const ConfigLoader = {
+        // Existing auto config method
         getAutoConfig() {
             try {
-                // Only accept configuration if it's frozen
                 const config = window[AUTO_CONFIG_KEY];
                 if (config && Object.isFrozen(config)) {
                     return this.validateRequiredSettings(config);
@@ -370,26 +407,197 @@ const Formtress = (() => {
                 return null;
             }
         },
-    
-        validateRequiredSettings(config) {
-            // Verify required security settings
-            const requiredSettings = {
-                'security.enabled': true,
-                'security.patterns.xss.enabled': true,
-                'security.patterns.sql.enabled': true,
-                'security.rateLimit.enabled': true,
-                'csp.enabled': true
-            };
-    
-            for (const [path, expectedValue] of Object.entries(requiredSettings)) {
-                const value = path.split('.').reduce((obj, key) => obj?.[key], config);
-                if (value !== expectedValue) {
-                    console.warn(`Formtress: Required setting ${path} must be true`);
-                    return null;
+
+        // Add remote config loading
+        async loadRemoteConfig(url, options = {}) {
+            const {
+                retries = 3,
+                timeout = 5000,
+                validateSignature = true,
+                publicKey = null
+            } = options;
+
+            try {
+                // Create abort controller for timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+                // Attempt to fetch with retries
+                let lastError;
+                for (let attempt = 0; attempt < retries; attempt++) {
+                    try {
+                        const response = await fetch(url, {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'Formtress',
+                                'X-Formtress-Version': '0.1.0'
+                            },
+                            signal: controller.signal
+                        });
+
+                        clearTimeout(timeoutId);
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        // Get both config and signature if available
+                        const config = await response.json();
+                        const signature = response.headers.get('X-Config-Signature');
+
+                        // Validate signature if required
+                        if (validateSignature) {
+                            if (!signature || !publicKey) {
+                                throw new Error('Configuration signature validation failed: Missing signature or public key');
+                            }
+
+                            const isValid = await this.verifySignature(
+                                JSON.stringify(config),
+                                signature,
+                                publicKey
+                            );
+
+                            if (!isValid) {
+                                throw new Error('Configuration signature validation failed');
+                            }
+                        }
+
+                        // Validate and freeze config
+                        const validatedConfig = this.validateRequiredSettings(config);
+                        return Object.freeze(validatedConfig);
+
+                    } catch (error) {
+                        lastError = error;
+                        if (error.name === 'AbortError') {
+                            console.warn(`Formtress: Config loading timeout (attempt ${attempt + 1}/${retries})`);
+                        } else {
+                            console.warn(`Formtress: Config loading failed (attempt ${attempt + 1}/${retries}):`, error);
+                        }
+                        
+                        // Wait before retry (exponential backoff)
+                        if (attempt < retries - 1) {
+                            await new Promise(resolve => 
+                                setTimeout(resolve, Math.pow(2, attempt) * 1000)
+                            );
+                        }
+                    }
+                }
+
+                throw lastError || new Error('Failed to load remote configuration');
+
+            } catch (error) {
+                console.error('Formtress: Remote configuration loading failed:', error);
+                throw error;
+            }
+        },
+
+        // Verify cryptographic signature
+        async verifySignature(data, signature, publicKey) {
+            try {
+                // Convert base64 signature to buffer
+                const signatureBuffer = this.base64ToArrayBuffer(signature);
+                
+                // Import public key
+                const cryptoKey = await crypto.subtle.importKey(
+                    'spki',
+                    this.base64ToArrayBuffer(publicKey),
+                    {
+                        name: 'RSASSA-PKCS1-v1_5',
+                        hash: 'SHA-256'
+                    },
+                    false,
+                    ['verify']
+                );
+
+                // Verify signature
+                const dataBuffer = new TextEncoder().encode(data);
+                const isValid = await crypto.subtle.verify(
+                    'RSASSA-PKCS1-v1_5',
+                    cryptoKey,
+                    signatureBuffer,
+                    dataBuffer
+                );
+
+                return isValid;
+            } catch (error) {
+                console.error('Formtress: Signature verification failed:', error);
+                return false;
+            }
+        },
+
+        /**
+         * Convert base64 to ArrayBuffer
+         * @param {string} base64 - The base64 string to convert
+         * @returns {ArrayBuffer} The converted ArrayBuffer
+         */
+        base64ToArrayBuffer(base64) {
+            const binaryString = window.atob(base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        },
+
+        /**
+         * Merge configurations
+         * @param {...Object} configs - The configurations to merge
+         * @returns {Object} The merged configuration
+         */
+        mergeConfigs(...configs) {
+            return configs.reduce((merged, config) => {
+                if (!config) return merged;
+                return this.secureDeepMerge(merged, config);
+            }, {});
+        },
+
+        /**
+         * Secure deep merge utility
+         * @param {Object} target - The target object
+         * @param {Object} source - The source object
+         * @returns {Object} The merged object
+         */
+        secureDeepMerge(target, source) {
+            const merged = { ...target };
+
+            for (const key in source) {
+                if (Object.prototype.hasOwnProperty.call(source, key)) {
+                    if (this.isSecureKey(key)) {
+                        if (this.isObject(source[key]) && this.isObject(target[key])) {
+                            merged[key] = this.secureDeepMerge(target[key], source[key]);
+                        } else {
+                            merged[key] = source[key];
+                        }
+                    }
                 }
             }
-    
-            return config;
+
+            return merged;
+        },
+
+        /**
+         * Check if a key is secure
+         * @param {string} key - The key to check
+         * @returns {boolean} Whether the key is secure
+         */
+        isSecureKey(key) {
+            const unsafeKeys = [
+                '__proto__',
+                'constructor',
+                'prototype'
+            ];
+            return !unsafeKeys.includes(key);
+        },
+
+        /**
+         * Check if an item is an object
+         * @param {any} item - The item to check
+         * @returns {boolean} Whether the item is an object
+         */
+        isObject(item) {
+            return item && typeof item === 'object' && !Array.isArray(item);
         }
     };
 
@@ -400,7 +608,13 @@ const Formtress = (() => {
             this.path = path;
         }
     }
-    // Validate configuration against schema
+    /**
+     * Validate configuration against schema
+     * @param {Object} config - The configuration to validate
+     * @param {Object} schema - The schema to validate against
+     * @param {Array} path - The path to the current configuration
+     * @returns {Object} The validated configuration
+     */
     const validateConfig = (config, schema = CONFIG_SCHEMA, path = []) => {
         if (!config || typeof config !== 'object') {
             throw new ConfigurationError('Configuration must be an object', path);
@@ -470,7 +684,12 @@ const Formtress = (() => {
         return validatedConfig;
     };
 
-    // Apply configuration to a form
+    /**
+     * Apply configuration to a form
+     * @param {HTMLFormElement} form - The form to apply the configuration to
+     * @param {Object} config - The configuration to apply
+     * @returns {boolean} Whether the configuration was applied successfully
+     */
     const applyConfig = (form, config) => {
         if (!(form instanceof HTMLFormElement)) {
             throw new ConfigurationError('Target must be a form element');
@@ -498,7 +717,11 @@ const Formtress = (() => {
         }
     };
 
-    // Load configuration from JSON
+    /**
+     * Load configuration from JSON
+     * @param {string} url - The URL to load the configuration from
+     * @returns {Object} The loaded configuration
+     */
     const loadConfigFromJson = async (url) => {
         try {
             const response = await fetch(url);
@@ -513,7 +736,12 @@ const Formtress = (() => {
         }
     };
 
-    // Add a deep merge utility
+    /**
+     * Deep merge utility
+     * @param {Object} target - The target object
+     * @param {Object} source - The source object
+     * @returns {Object} The merged object
+     */
     const deepMerge = (target, source) => {
         // Handle null/undefined cases
         if (!source) return target;
@@ -538,7 +766,11 @@ const Formtress = (() => {
             return !unsafeKeys.includes(key);
         };
     
-        // Helper to check if value is a plain object
+        /**
+         * Check if value is a plain object
+         * @param {any} obj - The value to check
+         * @returns {boolean} Whether the value is a plain object
+         */
         const isPlainObject = (obj) => {
             if (!obj || typeof obj !== 'object') return false;
             const proto = Object.getPrototypeOf(obj);
@@ -890,29 +1122,163 @@ const Formtress = (() => {
     class FormtressForm {
         
         constructor(form, customConfig = {}) {
-            // Try to load auto-configuration
-            const autoConfig = ConfigLoader.getAutoConfig();
-            
-            // Merge configurations with priority
-            const config = deepMerge(
-                SECURITY_CONFIG,
-                deepMerge(autoConfig || {}, customConfig)
-            );
-            
-            const secureConfig = SecureFormtressConfigInjector.lockConfig(form, config);
-            const secure = {
-                form: form,
-                config: config,
-                security: new SecurityCore(config.security),
-                rateLimiter: config.rateLimit.enabled ? new RateLimiter(config.rateLimit) : null,
-                fields: new Map(),
-                lastSubmit: 0,
-                csp: new CSPCore(config.csp),
-                debouncedValidations: new Map() // Store debounced functions per field
+            // Random debugger placement
+            const debugTrap = (() => {
+                let counter = 0;
+                
+                // DevTools detection methods
+                const detectDevTools = () => {
+                    const checks = [
+                        // Method 1: More accurate window size check for undocked devtools
+                        (() => {
+                            const widthThreshold = window.outerWidth - window.innerWidth > 160;
+                            const heightThreshold = window.outerHeight - window.innerHeight > 160;
+                            return widthThreshold && heightThreshold;  // Must meet both conditions
+                        })(),
+
+                        // Method 2: More reliable performance timing check
+                        (() => {
+                            const start = performance.now();
+                            debugger;
+                            const end = performance.now();
+                            return (end - start) > 200;  // Increased threshold for reliability
+                        })(),
+
+                        // Method 3: Dev tools object check
+                        (() => {
+                            const isFirebug = window.console && window.console.firebug;
+                            const isChrome = window.chrome && window.chrome.devtools;
+                            return isFirebug || isChrome;
+                        })()
+                    ];
+
+                    // Require at least 2 checks to be true to reduce false positives
+                    return checks.filter(Boolean).length >= 2;
+                };
+
+                return () => {
+                    // Increment counter
+                    counter++;
+
+                    // Check for excessive debugging
+                    if (counter > 100) {
+                        console.warn('Excessive debugging detected');
+                        window.location.reload();
+                        return;
+                    }
+
+                    // Only proceed if DevTools are actually detected
+                    if (detectDevTools()) {
+                        console.warn('DevTools detected');
+                        const noise = crypto.getRandomValues(new Uint8Array(1))[0];
+                        
+                        // Force reload after long debugging session
+                        const debugStart = performance.now();
+                        debugger;
+                        const debugEnd = performance.now();
+                        
+                        if (debugEnd - debugStart > 5000) { // 5 seconds debug timeout
+                            window.location.reload();
+                            return true;
+                        }
+                        
+                        // Random reload for shorter sessions
+                        if (noise % 4 === 0) {
+                            window.location.reload();
+                        }
+                        return true;
+                    }
+
+                    return false;
+                };
+            })();
+
+            // More conservative monitoring interval
+            const startDevToolsMonitoring = () => {
+                let debugStartTime = null;
+                
+                const monitor = setInterval(() => {
+                    try {
+                        if (detectDevTools()) {
+                            if (!debugStartTime) {
+                                debugStartTime = performance.now();
+                            } else if (performance.now() - debugStartTime > 10000) { // 10 seconds total debug time
+                                console.warn('Long debugging session detected, reloading...');
+                                window.location.reload();
+                            }
+                        } else {
+                            debugStartTime = null;
+                        }
+                    } catch (error) {
+                        clearInterval(monitor);
+                    }
+                }, 1000);
+
+                // Cleanup after 5 minutes if no issues
+                setTimeout(() => clearInterval(monitor), 5 * 60 * 1000);
             };
-            
-            privateStore.set(this, secure);
-            this.initializeForm();
+
+            // Add some random delay to make timing attacks harder
+            const randomDelay = Math.random() * 100;
+            setTimeout(() => {
+                debugTrap(); // First trap
+
+                const initStart = performance.now();
+                
+                // Set up initialization timeout
+                const initTimeout = setTimeout(() => {
+                    if (performance.now() - initStart > 10000) { // 10 seconds init timeout
+                        console.warn('Formtress: Initialization took too long, reloading page...');
+                        window.location.reload();
+                    }
+                }, 10000);
+
+                try {
+                    debugTrap(); // Second trap
+                    
+                    // Try to load auto-configuration
+                    const autoConfig = ConfigLoader.getAutoConfig();
+                    
+                    debugTrap(); // Third trap
+
+                    // Merge configurations with priority
+                    const config = deepMerge(
+                        SECURITY_CONFIG,
+                        deepMerge(autoConfig || {}, customConfig)
+                    );
+                    
+                    debugTrap(); // Fourth trap
+
+                    const secureConfig = SecureFormtressConfigInjector.lockConfig(form, config);
+                    const secure = {
+                        form: form,
+                        config: config,
+                        security: new SecurityCore(config.security),
+                        rateLimiter: config.rateLimit.enabled ? new RateLimiter(config.rateLimit) : null,
+                        fields: new Map(),
+                        lastSubmit: 0,
+                        csp: new CSPCore(config.csp),
+                        debouncedValidations: new Map()
+                    };
+                    
+                    debugTrap(); // Fifth trap
+                    
+                    privateStore.set(this, secure);
+                    this.initializeForm();
+
+                    // Clear timeout if initialization completes successfully
+                    clearTimeout(initTimeout);
+                    
+                    // Start monitoring after successful init
+                    setTimeout(startDevToolsMonitoring, 1000);
+
+                } catch (error) {
+                    debugTrap(); // Error trap
+                    clearTimeout(initTimeout);
+                    console.error('Formtress: Configuration error detected');
+                    window.location.reload();
+                }
+            }, randomDelay);
         }
         /**
          * Get the CSP nonce
@@ -2074,6 +2440,452 @@ const Formtress = (() => {
     // Initialize observer
     const observer = new FormtressObserver();
 
+    // Add after the CONFIG_SCHEMA definition:
+    const SecureAjaxWrapper = (() => {
+        // Store original methods in closure
+        const originalFetch = window.fetch;
+        const originalXHR = window.XMLHttpRequest;
+        
+        // Add AjaxMonitor first since it's used by other functions
+        const AjaxMonitor = {
+            requests: new Map(),
+            stats: {
+                fetch: { success: 0, failed: 0, blocked: 0 },
+                xhr: { success: 0, failed: 0, blocked: 0 }
+            },
+            
+            startRequest(type, url, options = {}) {
+                const requestId = crypto.randomUUID();
+                const timestamp = Date.now();
+                
+                this.requests.set(requestId, {
+                    type,
+                    url,
+                    options,
+                    startTime: timestamp,
+                    status: 'pending'
+                });
+                
+                this.dispatchEvent('request:start', {
+                    requestId,
+                    type,
+                    url,
+                    timestamp,
+                    options
+                });
+                
+                return requestId;
+            },
+            
+            endRequest(requestId, status, response = null, error = null) {
+                const request = this.requests.get(requestId);
+                if (!request) return;
+                
+                const duration = Date.now() - request.startTime;
+                const finalStatus = status === 'success' ? 'success' : 'failed';
+                
+                this.stats[request.type][finalStatus]++;
+                
+                request.status = finalStatus;
+                request.duration = duration;
+                request.response = response;
+                request.error = error;
+                
+                this.dispatchEvent('request:end', {
+                    requestId,
+                    type: request.type,
+                    url: request.url,
+                    duration,
+                    status: finalStatus,
+                    response,
+                    error
+                });
+                
+                this.cleanup();
+            },
+            
+            blockRequest(type, url, reason) {
+                this.stats[type].blocked++;
+                
+                this.dispatchEvent('request:blocked', {
+                    type,
+                    url,
+                    reason,
+                    timestamp: Date.now()
+                });
+            },
+            
+            dispatchEvent(eventName, detail) {
+                const event = new CustomEvent(`formtress:ajax:${eventName}`, {
+                    detail: {
+                        ...detail,
+                        timestamp: Date.now()
+                    }
+                });
+                document.dispatchEvent(event);
+                
+                if (this.isDebugEnabled()) {
+                    console.debug(`Formtress Ajax Monitor - ${eventName}:`, detail);
+                }
+            },
+            
+            cleanup() {
+                const hour = 60 * 60 * 1000;
+                const maxRequests = 100;
+                const now = Date.now();
+                
+                let requests = Array.from(this.requests.entries());
+                requests = requests.filter(([_, req]) => now - req.startTime < hour);
+                
+                if (requests.length > maxRequests) {
+                    requests = requests.slice(-maxRequests);
+                }
+                
+                this.requests = new Map(requests);
+            },
+            
+            getStats() {
+                return {
+                    ...this.stats,
+                    activeRequests: Array.from(this.requests.values())
+                        .filter(req => req.status === 'pending').length,
+                    timestamp: Date.now()
+                };
+            },
+            
+            isDebugEnabled() {
+                return localStorage.getItem('formtress:ajax:debug') === 'true';
+            },
+            
+            reset() {
+                this.requests.clear();
+                this.stats = {
+                    fetch: { success: 0, failed: 0, blocked: 0 },
+                    xhr: { success: 0, failed: 0, blocked: 0 }
+                };
+            }
+        };
+
+        // Define secure URL validator before secureFetch
+        const isSecureUrl = (url) => {
+            try {
+                const urlObj = new URL(url, window.location.origin);
+                if (urlObj.origin !== window.location.origin) {
+                    console.warn('Formtress: Cross-origin request detected:', urlObj.origin);
+                }
+                const dangerousPatterns = SECURITY_CONFIG.patterns.ajax.patterns;
+                return !dangerousPatterns.some(pattern => 
+                    new RegExp(pattern).test(decodeURIComponent(url))
+                );
+            } catch (error) {
+                console.error('Formtress: Invalid URL:', error);
+                return false;
+            }
+        };
+
+        const validateHeaders = (headers) => {
+            const dangerousHeaders = [
+                'Authorization',
+                'Cookie',
+                'X-CSRF-Token'
+            ];
+            
+            if (headers instanceof Headers) {
+                headers.forEach((value, key) => {
+                    if (dangerousHeaders.includes(key)) {
+                        console.warn(`Formtress: Sensitive header detected: ${key}`);
+                    }
+                });
+            }
+            return headers;
+        };
+
+        const secureFetch = async (input, init = {}) => {
+            const url = input instanceof Request ? input.url : input;
+            
+            try {
+                if (!isSecureUrl(url)) {
+                    AjaxMonitor.blockRequest('fetch', url, 'Insecure URL');
+                    throw new FormtressError('Insecure URL detected', 'ajax');
+                }
+                
+                const requestId = AjaxMonitor.startRequest('fetch', url, init);
+                
+                const secureInit = {
+                    ...init,
+                    headers: {
+                        ...init.headers,
+                        'X-Requested-With': 'Formtress',
+                        'X-Formtress-Protected': '1'
+                    }
+                };
+    
+                try {
+                    const response = await originalFetch(input, secureInit);
+                    
+                    AjaxMonitor.endRequest(requestId, 
+                        response.ok ? 'success' : 'failed',
+                        {
+                            status: response.status,
+                            statusText: response.statusText,
+                            headers: Object.fromEntries(response.headers.entries())
+                        }
+                    );
+                    
+                    return response;
+                } catch (error) {
+                    AjaxMonitor.endRequest(requestId, 'failed', null, error.message);
+                    throw error;
+                }
+            } catch (error) {
+                console.error('Formtress: Fetch error:', error);
+                throw error;
+            }
+        };
+
+        class SecureXMLHttpRequest extends originalXHR {
+            constructor() {
+                super();
+                
+                let requestId = null;
+                
+                const originalOpen = this.open;
+                this.open = function(method, url, async = true) {
+                    if (!isSecureUrl(url)) {
+                        AjaxMonitor.blockRequest('xhr', url, 'Insecure URL');
+                        throw new FormtressError('Insecure URL detected', 'ajax');
+                    }
+                    
+                    requestId = AjaxMonitor.startRequest('xhr', url, { method, async });
+                    return originalOpen.call(this, method, url, async);
+                };
+
+                const originalSetHeader = this.setRequestHeader;
+                this.setRequestHeader = function(header, value) {
+                    validateHeaders(new Headers([[header, value]]));
+                    return originalSetHeader.call(this, header, value);
+                };
+
+                const originalSend = this.send;
+                this.send = function(data) {
+                    this.setRequestHeader('X-Requested-With', 'Formtress');
+                    this.setRequestHeader('X-Formtress-Protected', '1');
+                    
+                    this.addEventListener('readystatechange', () => {
+                        if (this.readyState === 4 && requestId) {
+                            AjaxMonitor.endRequest(requestId,
+                                this.status >= 200 && this.status < 300 ? 'success' : 'failed',
+                                {
+                                    status: this.status,
+                                    statusText: this.statusText,
+                                    headers: this.getAllResponseHeaders()
+                                }
+                            );
+                        }
+                    });
+
+                    return originalSend.call(this, data);
+                };
+            }
+        }
+
+        const protectFetch = () => {
+            try {
+                // Try to delete existing property first
+                delete window.fetch;
+                
+                Object.defineProperty(window, 'fetch', {
+                    configurable: false,
+                    enumerable: true,
+                    get() {
+                        return secureFetch;
+                    },
+                    set(value) {
+                        AjaxMonitor.blockRequest('fetch', 'window.fetch', 'Attempted fetch override');
+                        console.warn('Formtress: Attempted to override fetch');
+                        return secureFetch;
+                    }
+                });
+    
+                Object.freeze(window.fetch);
+                
+                setInterval(() => {
+                    if (window.fetch !== secureFetch) {
+                        AjaxMonitor.blockRequest('fetch', 'window.fetch', 'Fetch override detected');
+                        console.warn('Formtress: Fetch override detected, restoring secure version');
+                        try {
+                            delete window.fetch;
+                            window.fetch = secureFetch;
+                        } catch (e) {
+                            console.error('Failed to restore fetch:', e);
+                        }
+                    }
+                }, 1000);
+            } catch (e) {
+                console.warn('Could not fully protect fetch:', e);
+                // Fallback: try to at least override the function
+                window.fetch = secureFetch;
+            }
+        };
+
+        const protectXHR = () => {
+            try {
+                delete window.XMLHttpRequest;
+                
+                Object.defineProperty(window, 'XMLHttpRequest', {
+                    configurable: false,
+                    enumerable: true,
+                    get() {
+                        return SecureXMLHttpRequest;
+                    },
+                    set(value) {
+                        AjaxMonitor.blockRequest('xhr', 'window.XMLHttpRequest', 'Attempted XHR override');
+                        console.warn('Formtress: Attempted to override XMLHttpRequest');
+                        return SecureXMLHttpRequest;
+                    }
+                });
+    
+                Object.freeze(window.XMLHttpRequest);
+                
+                setInterval(() => {
+                    if (window.XMLHttpRequest !== SecureXMLHttpRequest) {
+                        AjaxMonitor.blockRequest('xhr', 'window.XMLHttpRequest', 'XHR override detected');
+                        console.warn('Formtress: XMLHttpRequest override detected, restoring secure version');
+                        try {
+                            delete window.XMLHttpRequest;
+                            window.XMLHttpRequest = SecureXMLHttpRequest;
+                        } catch (e) {
+                            console.error('Failed to restore XMLHttpRequest:', e);
+                        }
+                    }
+                }, 1000);
+            } catch (e) {
+                console.warn('Could not fully protect XMLHttpRequest:', e);
+                window.XMLHttpRequest = SecureXMLHttpRequest;
+            }
+        };
+
+        const protectGlobals = () => {
+            const globals = ['self', 'globalThis'];
+            
+            globals.forEach(globalName => {
+                const global = window[globalName];
+                if (global && global !== window) {
+                    try {
+                        delete global.fetch;
+                        delete global.XMLHttpRequest;
+                        
+                        Object.defineProperty(global, 'fetch', {
+                            configurable: true,
+                            enumerable: true,
+                            get() {
+                                return secureFetch;
+                            },
+                            set(value) {
+                                AjaxMonitor.blockRequest('fetch', `${globalName}.fetch`, 'Attempted fetch override through global');
+                                console.warn(`Formtress: Attempted to override fetch through ${globalName}`);
+                                return secureFetch;
+                            }
+                        });
+    
+                        Object.defineProperty(global, 'XMLHttpRequest', {
+                            configurable: true,
+                            enumerable: true,
+                            get() {
+                                return SecureXMLHttpRequest;
+                            },
+                            set(value) {
+                                AjaxMonitor.blockRequest('xhr', `${globalName}.XMLHttpRequest`, 'Attempted XHR override through global');
+                                console.warn(`Formtress: Attempted to override XMLHttpRequest through ${globalName}`);
+                                return SecureXMLHttpRequest;
+                            }
+                        });
+                    } catch (e) {
+                        console.warn(`Could not protect ${globalName} globals:`, e);
+                    }
+                }
+            });
+        };
+
+        const detectOriginalFetchAccess = () => {
+            const warning = () => {
+                AjaxMonitor.blockRequest('fetch', 'originalFetch', 'Attempted access to original fetch');
+                console.warn('Formtress: Attempted to access original fetch detected');
+            };
+
+            const monitoredProps = [
+                'constructor',
+                'prototype',
+                '__proto__',
+                'caller',
+                'arguments'
+            ];
+
+            monitoredProps.forEach(prop => {
+                try {
+                    Object.defineProperty(secureFetch, prop, {
+                        get() {
+                            warning();
+                            return undefined;
+                        },
+                        set() {
+                            warning();
+                            return false;
+                        },
+                        configurable: false
+                    });
+                } catch (e) {
+                    // Some properties might not be configurable
+                    console.debug(`Formtress: Could not monitor ${prop}`, e);
+                }
+            });
+        };
+
+        return {
+            init() {
+                try {
+                    protectFetch();
+                    protectXHR();
+                    protectGlobals();
+                    detectOriginalFetchAccess();
+                    
+                    window.FormtressAjaxMonitor = Object.freeze({
+                        getStats: () => AjaxMonitor.getStats(),
+                        enableDebug: () => localStorage.setItem('formtress:ajax:debug', 'true'),
+                        disableDebug: () => localStorage.setItem('formtress:ajax:debug', 'false'),
+                        reset: () => AjaxMonitor.reset(),
+                        isSecure: () => {
+                            try {
+                                return window.fetch === secureFetch && 
+                                       window.XMLHttpRequest === SecureXMLHttpRequest;
+                            } catch (e) {
+                                return false;
+                            }
+                        }
+                    });
+                    /**
+                     * Security check interval
+                     * This interval checks if the security is compromised
+                     * and if so, it reloads the page
+                     */
+                    setInterval(() => {
+                        if (!FormtressAjaxMonitor.isSecure()) {
+                            AjaxMonitor.blockRequest('system', 'security-check', 'Security compromise detected');
+                            console.error('Formtress: Security compromise detected, reloading page...');
+                            window.location.reload();
+                        }
+                    }, 2000);
+                } catch (e) {
+                    console.error('Failed to initialize SecureAjaxWrapper:', e);
+                }
+            }
+        };
+    })();
+
+    // Add to the Formtress initialization (inside the IIFE):
+    // Initialize secure AJAX wrappers
+    SecureAjaxWrapper.init();
+
     // Public API
     return Object.freeze({
         // Manual form security if needed
@@ -2203,7 +3015,7 @@ const Formtress = (() => {
         }
     });
 })();
-})();
+})(); // Double IIFE to ensure all code is executed
 
 // Auto-initialize when the DOM is ready
 if (document.readyState === 'loading') {

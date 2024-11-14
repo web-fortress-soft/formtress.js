@@ -1,24 +1,30 @@
 # Formtress.js 🛡️
 
-> Millitary-grade form and DOM security with focus on DX.
+> Military-grade form and DOM security with focus on DX.
 <br />
 
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/yourusername/formtress)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-
-
 ## It's not your choice which security vulnerability to address. Your only option is ALL.
 
-formtress.js is an advanced, enterprise-grade, unobtrusive, security-focused form utility library that automatically protects your forms and DOM against common and advanced web vulnerabilities. It provides comprehensive security features on its default state, while maintaining full flexibility for customization. It also includes self defense mechanisms to prevent security level degradation, prototyping and instance access.
+Formtress.js is an advanced, enterprise-grade, unobtrusive, security-focused form utility library that automatically protects your forms and DOM against common and advanced web vulnerabilities. It provides comprehensive security features on its default state, while maintaining full flexibility for customization. It includes self-defense mechanisms to prevent security level degradation, prototyping and instance access.
 
 ## Features 🚀
 
-- **Automatic Form Discovery & Protection**
-  - No manual initialization required for default mode
-  - Secure by default
-  - Non-intrusive implementation
-  - Supports dynamic form and input creation
+- **Self-Healing Security Architecture**
+  - Runtime method interception and protection
+  - Continuous security state monitoring
+  - Automatic recovery from compromises
+  - Real-time security violation detection
+  - Multi-layer property protection
+
+- **Advanced AJAX Protection**
+  - Secure `fetch` and `XMLHttpRequest` wrappers
+  - Request monitoring and statistics
+  - Cross-origin request validation
+  - Security headers injection
+  - Request signature verification
 
 - **Comprehensive Security**
   - XSS (Cross-Site Scripting) Protection
@@ -27,156 +33,103 @@ formtress.js is an advanced, enterprise-grade, unobtrusive, security-focused for
   - Prototype Pollution Prevention
   - Path Traversal Detection
   - Command Injection Prevention
-  - CSP Support Available
+  - CSP Support
 
-- **Advanced Input Validation & Sanitization**
-  - Real-time validation
-  - Configurable sanitization rules
-  - Built-in patterns for common fields (email, phone, URL, etc.)
-  - Custom validation support
+- **Remote Configuration System**
+  - Secure configuration loading
+  - Cryptographic signature verification
+  - Configuration integrity validation
+  - Fallback mechanisms
+  - Auto-configuration support
 
 - **Enterprise Features**
+  - Real-time security monitoring
+  - Event-based violation reporting
+  - Audit trail creation
   - Rate limiting
-  - Event monitoring
-  - Robust error handling
   - Accessibility support (ARIA)
-  - Configuration validation
-  - Deep merge utility
-  - Secure configuration store
-
-- **Self Defense Mechanisms - because security must be secured**
-  - Operate like a Ghost with zero reference in the DOM.
-  - Security configuration schema
-  - Security level degradation detection and prevention
-  - Prevent prototype pollution
-  - Prevent property tampering
-  - Prevent property deletion
-  - Prevent property enumeration
-  - Prevent property redefinition
-  - Prevent property overwriting
-  - Prevent property tampering
-  - Prevent property deletion
- 
 
 ## Installation 📦
-- To be published on npm soon
+
 ```bash
 npm install formtress
 ```
 
 Or include it directly in your HTML:
-- To be published on jsdelivr soon
 ```html
 <script src="https://cdn.jsdelivr.net/npm/formtress@0.1.0/dist/formtress.min.js"></script>
 ```
 
 ## Quick Start 🚀
 
-Formtress.js works automatically! Just include it in your project:
+Basic usage with auto-configuration:
 
 ```html
 <script src="formtress.js"></script>
+<script>
+    // Formtress automatically protects all forms
+    // No configuration needed for basic protection
+</script>
 ```
 
-That's it! Your forms are now protected. Formtress automatically:
-- Discovers and secures all forms
-- Validates inputs in real-time
-- Prevents XSS and injection attacks
-- Provides feedback to users
+## Advanced Configuration 🔧
 
-## Advanced Usage 🔧
+### Remote Configuration
 
-### Custom Configuration
+```javascript
+// Load and apply remote configuration
+await Formtress.loadConfig('/api/formtress/config', {
+    validateSignature: true,
+    publicKey: 'YOUR_PUBLIC_KEY',
+    retries: 3,
+    timeout: 5000
+});
+```
+
+### Manual Configuration
 
 ```javascript
 Formtress.inject('#myForm', {
-  security: {
-    rateLimit: {
-      enabled: true,
-      window: 1000,
-      max: 30
-    },
-    csrf: {
-      enabled: true,
-      fieldName: '_csrf'
+    security: {
+        ajax: {
+            enabled: true,
+            validateOrigin: true,
+            allowedDomains: ['trusted-domain.com']
+        },
+        monitoring: {
+            enabled: true,
+            reportUrl: '/api/security/violations'
+        }
     }
-  },
-  feedback: {
-    showSuccess: true,
-    showError: true,
-    successColor: '#4CAF50',
-    errorColor: '#ff4444'
-  }
 });
 ```
 
-### DOM Protection
+## Security Monitoring 🔍
+
+Monitor security events in real-time:
 
 ```javascript
-// Protect specific elements
-Formtress.dom.protectElement(element, {
-  allowHtml: false,
-  allowUrls: true,
-  urlWhitelist: ['trusted-domain.com']
+// Listen for security violations
+document.addEventListener('formtress:ajax:request:blocked', (e) => {
+    console.warn('Security violation:', e.detail);
 });
 
-// Sanitize content
-const sanitized = Formtress.dom.sanitize(userInput);
+// Get security statistics
+const stats = FormtressAjaxMonitor.getStats();
+console.log('Security Stats:', stats);
+
+// Enable debug mode
+FormtressAjaxMonitor.enableDebug();
 ```
 
-### Content Sanitization
+## Self-Healing Features 🔄
 
-```javascript
-const sanitizer = Formtress.dom.createSanitizer({
-  mode: 'strict',
-  allowedProtocols: ['http:', 'https:'],
-  allowedDomains: ['trusted.com']
-});
+Formtress includes automatic recovery mechanisms:
 
-const clean = sanitizer.sanitizeContent(userContent);
-```
-
-## Security Features Deep Dive 🔐
-
-### XSS Prevention
-- Automatic escaping of dangerous characters
-- Pattern-based detection of malicious scripts
-- Safe HTML handling
-
-### SQL Injection Prevention
-- Detection of SQL keywords and patterns
-- Validation of input against SQL injection attempts
-- Sanitization of database-bound inputs
-
-### CSRF Protection
-- Automatic token generation and validation
-- Configurable token placement
-- Request validation
-
-### Rate Limiting
-- Configurable time windows
-- Request counting and throttling
-- Protection against brute force attacks
-
-## Events & Hooks 🎣
-
-```javascript
-form.addEventListener('formtress:violation', (e) => {
-  console.log('Security violation:', e.detail);
-});
-
-form.addEventListener('formtress:success', (e) => {
-  console.log('Form validated:', e.detail.data);
-});
-```
-
-## Accessibility ♿
-
-Formtress.js is built with accessibility in mind:
-- ARIA attributes support
-- Screen reader friendly error messages
-- Keyboard navigation support
-- Color contrast compliance
+- Runtime security state monitoring
+- Automatic restoration of compromised protections
+- Real-time violation detection and response
+- Security level degradation prevention
 
 ## Browser Support 🌐
 
@@ -188,15 +141,15 @@ Formtress.js is built with accessibility in mind:
 
 ## Contributing 🤝
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
-
-## License 📄
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## Security 🔒
 
 Found a security issue? Please email web-formtress-sort@gmail.com or submit it through our bug bounty program.
+
+## License 📄
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
