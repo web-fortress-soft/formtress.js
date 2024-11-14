@@ -1,6 +1,6 @@
 # Formtress.js 🛡️
 
-## It's not your choice which security vulnerability to address. Your only option is to ALL.
+## It's not your choice which security vulnerability to address. Your only option is ALL.
 <br />
 
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/yourusername/formtress)
