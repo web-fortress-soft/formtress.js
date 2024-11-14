@@ -15,7 +15,7 @@ formtress.js is an advanced, enterprise-grade, unobtrusive, security-focused, mu
 ## Features 🚀
 
 - **Automatic Form Discovery & Protection**
-  - No manual initialization required
+  - No manual initialization required for default mode
   - Secure by default
   - Non-intrusive implementation
   - Supports dynamic form and input creation
@@ -27,6 +27,7 @@ formtress.js is an advanced, enterprise-grade, unobtrusive, security-focused, mu
   - Prototype Pollution Prevention
   - Path Traversal Detection
   - Command Injection Prevention
+  - CSP Support Available
 
 - **Advanced Input Validation & Sanitization**
   - Real-time validation
@@ -44,6 +45,7 @@ formtress.js is an advanced, enterprise-grade, unobtrusive, security-focused, mu
   - Secure configuration store
 
 - **Self Defense Mechanisms - because security must be secured**
+  - Operate like a Ghost with zero reference in the DOM.
   - Security configuration schema
   - Security level degradation detection and prevention
   - Prevent prototype pollution
