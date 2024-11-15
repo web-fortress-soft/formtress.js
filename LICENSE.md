@@ -22,6 +22,7 @@ Enterprise users gain access to:
 - Community support priority
 
 ## Enterprise Fees
+- Free to use for sites being attacked
 - $299/month per domain
 - $2,999/year per domain
 - Volume licensing available for multiple domains
