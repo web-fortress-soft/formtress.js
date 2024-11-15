@@ -4011,10 +4011,11 @@
             }
         });
     })();
-})(); // Double IIFE to ensure all code is executed
+})(); // Double IIFE first layer of defence.
 
 // Auto-initialize when the DOM is ready
 if (document.readyState === 'loading') {
+    console.log("Formtress: Waiting for DOM to complete.");
     document.addEventListener('DOMContentLoaded', () => {
         // Formtress is already initialized through the FormtressObserver
         console.log('Formtress: Initialized through DOMContentLoaded');
