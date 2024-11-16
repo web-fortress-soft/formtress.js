@@ -21,37 +21,96 @@
  * - Zero-trust architecture
  */
 (function() {
-    const Formtress = (() => {
-        //check if in development by using localhost
-        const isDevelopment = window.location.hostname.includes('localhost');
-        //warning checks
-        (() => {
-            if (typeof window === 'undefined') {
-                throw new Error('Formtress.js is not supported in this environment.');
-            }
-            //check if in development by using localhost
-            if (isDevelopment) {
-                //warning if no noscript element is found
-                if (!window.document.querySelector('noscript')) {
-                    console.warn('<noscript> element not found. Your site will be vulnerable to all kinds of attacks.');
-                }
-                //check if formtress is loaded as 1st or 2nd script from the header, remind developer to load it in the first 2 positions
-                //within the <head> element
-                const scripts = document.querySelectorAll('script');
-                if (scripts.length > 1 && scripts[0].src.includes('formtress')) {
-                    console.warn('Formtress.js should be loaded as the first or second script in the <head> element to ensure maximum security.');
-                }
-                //formtress should not be loaded as deferred
-                if (scripts.length > 1 && scripts[0].defer) {
-                    console.warn('Formtress.js should not be loaded with the defer attribute.');
-                }
-                //check if body is loaded, if so, warn the developer to load formtress before the body element
-                if (!document.body) {
-                    console.warn('Formtress.js should be loaded before the body element to ensure maximum security.');
-                }
-            }
-        })();
+    //check if in development by using localhost
+    const isDevelopment = window.location.hostname.includes('localhost');
+    //lets start our phychological warfare with a random form flag id :)
+    const randomAToZ = 'abcdefghijklmnopqrstuvwxyz';
+    const randomFormFlagId = Array.from({length: 10}, () => randomAToZ.charAt(Math.floor(Math.random() * randomAToZ.length))).join('');
+    console.log('Formtress: Random form flag id:', randomFormFlagId);
+    //error messages
+    const errorMessage={
+        noNoscript: 'Formtress.js: &lt;noscript&gt; element not found. Your site will be vulnerable to all kinds of attacks.',
+        noFormtress: 'Formtress.js should be loaded as the first or second script in the &lt;head&gt; element to ensure maximum security.',
+        noDefer: 'Formtress.js should not be loaded with the defer attribute.',
+        noBody: 'Formtress.js should be loaded before the body element to ensure maximum security.',
+        xssAttempt: 'XSS attempt detected',
+        sqlAttempt: 'SQL injection attempt detected',
+        commandAttempt: 'Command injection attempt detected',
+        prototypeAttempt: 'Prototype pollution attempt detected',
+        pathAttempt: 'Path traversal attempt detected'
+    }
+    //warning checks
+    if (typeof window === 'undefined') {
+        throw new Error('Formtress.js is not supported in this environment.');
+    }
+   
 
+    let errorHTML = '';
+    //check if in development by using localhost
+    if (isDevelopment) {
+        //warning if no noscript element is found
+        if (!window.document.querySelector('noscript')) {
+            //replace the body with a warning
+            errorHTML += errorMessage.noNoscript;
+            //warn the developer
+            console.warn(errorMessage.noNoscript);
+        }
+        //check if formtress is loaded as 1st or 2nd script from the header, remind developer to load it in the first 2 positions
+        //within the <head> element
+        const scripts = document.querySelectorAll('head script');
+        console.log(scripts);
+        if (scripts.length > 1 && scripts[0].src.includes('formtress')) {
+            //replace the body with a warning
+            errorHTML += errorMessage.noFormtress;
+            //warn the developer
+            console.warn(errorMessage.noFormtress);
+        }
+        let foundInHead = false;
+        scripts.forEach(script => {
+            if (script.src.includes('formtress')) {
+                foundInHead = true;
+            }
+        });
+        if (!foundInHead) {
+            //replace the body with a warning
+            errorHTML += errorMessage.noFormtress;
+            //warn the developer
+            console.warn(errorMessage.noFormtress);
+        }
+        //formtress should not be loaded as deferred
+        let formtressLoadDefer = false;
+        scripts.forEach(script => {
+            if (script.src.includes('formtress')) {
+                formtressLoadDefer = script.defer;
+            }
+        });
+        if (formtressLoadDefer) {
+            //replace the body with a warning
+            errorHTML += errorMessage.noDefer;
+            //warn the developer
+            console.warn(errorMessage.noDefer);
+        }
+        
+        // Replace await with a regular timeout and check
+        const waitForDocumentBeforeWarnings = () => {
+            if (document.readyState !== 'complete') {
+                setTimeout(waitForDocumentBeforeWarnings, 1);
+                return;
+            }
+            //check if body is loaded, if so, warn the developer to load formtress before the body element
+            if (!document.body) {
+                console.warn(errorMessage.noBody);
+            }
+            
+            //Let's not too hard on the developer in production
+            if (errorHTML && isDevelopment) {
+                document.body.innerHTML += errorHTML;
+            }
+        };
+        waitForDocumentBeforeWarnings();
+    }
+
+    const Formtress = (() => {
         const AUTO_CONFIG_KEY = 'FormtressConfig';
         // 1. Freeze core prototypes
         Object.freeze(Object.prototype);
@@ -59,9 +118,11 @@
         // Private storage
         const privateStore = new WeakMap();
         const securedForms = new WeakSet();
+        // The use of this is to create a unique key for private storage in the Formtress module
         const PRIVATE_KEY = Symbol('formtressPrivate');
+        // Initialize timeout for formtress to load
         const INIT_TIMEOUT = (() => {
-            // Random timeout between 8-12 seconds
+            // Random timeout between 8-12 seconds for phychological warfare
             const baseTimeout = 10000;
             const variance = 2000;
             return baseTimeout + (Math.random() * variance * 2 - variance);
@@ -413,10 +474,14 @@
             }
         };
         const ConfigLoader = {
-            // Existing auto config method
+            // Update auto config method
             getAutoConfig() {
                 try {
-                    const config = window[AUTO_CONFIG_KEY];
+                    // Look for FormtressConfig in current scope first, then fall back to window
+                    const config = typeof FormtressConfig !== 'undefined' ? 
+                        FormtressConfig : 
+                        window[AUTO_CONFIG_KEY];
+
                     if (config && Object.isFrozen(config)) {
                         return this.validateRequiredSettings(config);
                     }
@@ -617,6 +682,60 @@
              */
             isObject(item) {
                 return item && typeof item === 'object' && !Array.isArray(item);
+            },
+            validateRequiredSettings(config) {
+                if (!config || typeof config !== 'object') {
+                    throw new Error('Invalid configuration: must be an object');
+                }
+
+                // Helper function to validate structure
+                const validateStructure = (obj, schema, path = []) => {
+                    for (const [key, expectedType] of Object.entries(schema)) {
+                        const currentPath = [...path, key];
+                        const pathString = currentPath.join('.');
+                        const value = obj[key];
+
+                        // Check if required key exists
+                        if (value === undefined) {
+                            //throw new Error(`Missing required setting: ${pathString}`);
+                            //we will just log the error for now
+                            console.warn(`Missing required setting: ${pathString}`);
+                            continue;
+                        }
+
+                        if (expectedType === Boolean) {
+                            if (typeof value !== 'boolean') {
+                                throw new Error(`Invalid type for ${pathString}: expected boolean`);
+                            }
+                        } else if (expectedType === Number) {
+                            if (typeof value !== 'number') {
+                                throw new Error(`Invalid type for ${pathString}: expected number`);
+                            }
+                        } else if (expectedType === String) {
+                            if (typeof value !== 'string') {
+                                throw new Error(`Invalid type for ${pathString}: expected string`);
+                            }
+                        } else if (expectedType === RegExp) {
+                            if (!(value instanceof RegExp) && typeof value !== 'string') {
+                                throw new Error(`Invalid type for ${pathString}: expected RegExp or string`);
+                            }
+                        } else if (expectedType === Array) {
+                            if (!Array.isArray(value)) {
+                                throw new Error(`Invalid type for ${pathString}: expected array`);
+                            }
+                        } else if (typeof expectedType === 'object') {
+                            validateStructure(value, expectedType, currentPath);
+                        }
+                    }
+                };
+
+                try {
+                    validateStructure(config, CONFIG_SCHEMA);
+                    return config;
+                } catch (error) {
+                    console.error('Configuration validation failed:', error);
+                    throw error;
+                }
             }
         };
 
@@ -1334,6 +1453,7 @@
             autoReload: true,
             debug: false
         });
+
         // Core security class
         class SecurityCore {
             constructor(config) {
@@ -1966,81 +2086,82 @@
                     return deepFreeze(safeConfig);
                 }
             };
+        })();        
+        
+        // Random debugger placement
+        const debugTrap = (() => {
+            let counter = 0;
+
+            // DevTools detection methods
+            const detectDevTools = () => {
+                const checks = [
+                    // Method 1: More accurate window size check for undocked devtools
+                    (() => {
+                        const widthThreshold = window.outerWidth - window.innerWidth > 160;
+                        const heightThreshold = window.outerHeight - window.innerHeight > 160;
+                        return widthThreshold && heightThreshold;  // Must meet both conditions
+                    })(),
+
+                    // Method 2: More reliable performance timing check
+                    (() => {
+                        const start = performance.now();
+                        debugger;
+                        const end = performance.now();
+                        return (end - start) > 200;  // Increased threshold for reliability
+                    })(),
+
+                    // Method 3: Dev tools object check
+                    (() => {
+                        const isFirebug = window.console && window.console.firebug;
+                        const isChrome = window.chrome && window.chrome.devtools;
+                        return isFirebug || isChrome;
+                    })()
+                ];
+
+                // Require at least 2 checks to be true to reduce false positives
+                return checks.filter(Boolean).length >= 2;
+            };
+
+            return () => {
+                // Increment counter
+                counter++;
+
+                // Check for excessive debugging
+                if (counter > 100) {
+                    console.warn('Excessive debugging detected');
+                   window.location.reload();
+                    return;
+                }
+
+                // Only proceed if DevTools are actually detected
+                if (detectDevTools()) {
+                    console.warn('DevTools detected');
+                    const noise = crypto.getRandomValues(new Uint8Array(1))[0];
+
+                    // Force reload after long debugging session
+                    const debugStart = performance.now();
+                    debugger;
+                    const debugEnd = performance.now();
+
+                    if (debugEnd - debugStart > 5000) { // 5 seconds debug timeout
+                        window.location.reload();
+                        return true;
+                    }
+
+                    // Random reload for shorter sessions
+                    if (noise % 4 === 0) {
+                        window.location.reload();
+                    }
+                    return true;
+                }
+
+                return false;
+            };
         })();
         // Main Formtress class
         class FormtressForm {
 
             constructor(form, customConfig = {}) {
-                // Random debugger placement
-                const debugTrap = (() => {
-                    let counter = 0;
-
-                    // DevTools detection methods
-                    const detectDevTools = () => {
-                        const checks = [
-                            // Method 1: More accurate window size check for undocked devtools
-                            (() => {
-                                const widthThreshold = window.outerWidth - window.innerWidth > 160;
-                                const heightThreshold = window.outerHeight - window.innerHeight > 160;
-                                return widthThreshold && heightThreshold;  // Must meet both conditions
-                            })(),
-
-                            // Method 2: More reliable performance timing check
-                            (() => {
-                                const start = performance.now();
-                                debugger;
-                                const end = performance.now();
-                                return (end - start) > 200;  // Increased threshold for reliability
-                            })(),
-
-                            // Method 3: Dev tools object check
-                            (() => {
-                                const isFirebug = window.console && window.console.firebug;
-                                const isChrome = window.chrome && window.chrome.devtools;
-                                return isFirebug || isChrome;
-                            })()
-                        ];
-
-                        // Require at least 2 checks to be true to reduce false positives
-                        return checks.filter(Boolean).length >= 2;
-                    };
-
-                    return () => {
-                        // Increment counter
-                        counter++;
-
-                        // Check for excessive debugging
-                        if (counter > 100) {
-                            console.warn('Excessive debugging detected');
-                           window.location.reload();
-                            return;
-                        }
-
-                        // Only proceed if DevTools are actually detected
-                        if (detectDevTools()) {
-                            console.warn('DevTools detected');
-                            const noise = crypto.getRandomValues(new Uint8Array(1))[0];
-
-                            // Force reload after long debugging session
-                            const debugStart = performance.now();
-                            debugger;
-                            const debugEnd = performance.now();
-
-                            if (debugEnd - debugStart > 5000) { // 5 seconds debug timeout
-                                window.location.reload();
-                                return true;
-                            }
-
-                            // Random reload for shorter sessions
-                            if (noise % 4 === 0) {
-                                window.location.reload();
-                            }
-                            return true;
-                        }
-
-                        return false;
-                    };
-                })();
 
                 // More conservative monitoring interval
                 const startDevToolsMonitoring = () => {
@@ -2268,14 +2389,23 @@
                 field.parentNode.insertBefore(resultContainer, field.nextSibling);
 
                 // Create debounced validation function for this field
-                const debouncedValidation = ((fn, delay) => {
+                /*const debouncedValidation = ((fn, delay) => {
                     let timeoutId;
                     return (...args) => {
                         clearTimeout(timeoutId);
                         timeoutId = setTimeout(() => fn.apply(this, args), delay);
                     };
-                })(() => this.validateField(name), state.config.validation.debounce);
-
+                })(() => this.validateField(name), state.config.validation.debounce);*/
+                const debouncedValidation = createDebounce(
+                    () => this.validateField(name),
+                    state.config.validation.debounce,
+                    {
+                        leading: false,
+                        trailing: true,
+                        maxWait: 2000, // Maximum 2 seconds wait
+                        rejectOnCancel: false
+                    }
+                );
                 // Store field info
                 state.fields.set(name, {
                     element: field,
@@ -2309,10 +2439,16 @@
                 const field = state.fields.get(fieldName);
 
                 if (field) {
-                    // Create new debounced function with updated time
-                    const newDebouncedValidation = debounce(
+                    // Create new debounced function with updated time using createDebounce
+                    const newDebouncedValidation = createDebounce(
                         () => this.validateField(fieldName),
-                        time
+                        time,
+                        {
+                            leading: false,
+                            trailing: true,
+                            maxWait: time * 2, // Set maxWait to double the debounce time
+                            rejectOnCancel: false
+                        }
                     );
 
                     state.debouncedValidations.set(fieldName, newDebouncedValidation);
@@ -2327,8 +2463,8 @@
             clearDebouncedValidations() {
                 const state = privateStore.get(this);
                 state.debouncedValidations.forEach((debouncedFn, fieldName) => {
-                    if (debouncedFn.clear) {
-                        debouncedFn.clear();
+                    if (debouncedFn.cancel) {
+                        debouncedFn.cancel();
                     }
                 });
             }
@@ -2375,41 +2511,34 @@
             showResult(container, type, message = '') {
                 const state = privateStore.get(this);
                 const config = state.config.feedback;
-
-                // Add transition styles if not already present
-                container.style.transition = 'all 0.3s ease-in-out';
-                container.style.opacity = '0';
-
-                // Use setTimeout to ensure the opacity transition is visible
-                setTimeout(() => {
-                    container.className = `formtress-result formtress-${type}`;
-
-                    if (type === 'loading') {
-                        container.textContent = '⟳';
-                        container.style.color = '#666';
-                        container.style.animation = 'formtress-spin 1s linear infinite';
-
-                        // Add keyframes for spin animation if not already present
-                        if (!document.querySelector('#formtress-spin-keyframes')) {
-                            const keyframes = document.createElement('style');
-                            keyframes.id = 'formtress-spin-keyframes';
-                            keyframes.textContent = `
-                            @keyframes formtress-spin {
-                                from { transform: rotate(0deg); }
-                                to { transform: rotate(360deg); }
-                            }
-                        `;
-                            document.head.appendChild(keyframes);
-                        }
-                    } else {
-                        container.style.animation = 'none';
-                        container.className = `formtress-result formtress-${type}`;
-                        container.textContent = type === 'success' ? config.successSymbol : `${config.errorSymbol} ${message}`;
-                        container.style.color = type === 'success' ? config.successColor : config.errorColor;
+                const nonce = state.csp.getNonce();  // Get the consistent nonce
+        
+                // Create a style element with the nonce
+                const styleEl = document.createElement('style');
+                styleEl.nonce = nonce;
+                
+                // Define styles
+                styleEl.textContent = `
+                    .formtress-result.formtress-${type} {
+                        transition: all 0.3s ease-in-out;
+                        opacity: 1;
+                        color: ${type === 'success' ? config.successColor : 
+                               type === 'loading' ? '#666' : config.errorColor};
+                        ${type === 'loading' ? 'animation: formtress-spin 1s linear infinite;' : ''}
                     }
-
-                    container.style.opacity = '1';
-                }, 50);
+                `;
+        
+                // Remove any existing style elements
+                container.querySelectorAll('style[nonce]').forEach(el => el.remove());
+                
+                // Add new style element
+                document.head.appendChild(styleEl);
+        
+                // Update container
+                container.className = `formtress-result formtress-${type}`;
+                container.textContent = type === 'loading' ? '⟳' : 
+                                      type === 'success' ? config.successSymbol : 
+                                      `${config.errorSymbol} ${message}`;
             }
             /**
              * Destroy the form
@@ -2494,7 +2623,7 @@
                                 if (node.nodeName === 'FORM' && !node.dataset.formtressSecured) {
                                     this.secureForm(node);
                                 }
-                                node.querySelectorAll('form:not([data-formtress-secured])')
+                                node.querySelectorAll(`form:not([${randomFormFlagId}])`)
                                     .forEach(form => this.secureForm(form));
                             }
                         });
@@ -2508,196 +2637,7 @@
             }
         }
 
-        /**
-         * DOMProtector class
-         */
-        class DOMProtector {
-            constructor(config) {
-                this.config = config;
-                this.protectedElements = new WeakMap();
-                this.observer = null;
-            }
-            /**
-             * Sanitize content
-             * @param {string} content - The content to sanitize
-             * @returns {string} The sanitized content
-             */
-            sanitizeContent(content) {
-                if (typeof content !== 'string') {
-                    return content;
-                }
-
-                // Apply all XSS patterns
-                const sanitized = SECURITY_CONFIG.patterns.xss.patterns.reduce(
-                    (result, pattern) => result.replace(pattern, ''),
-                    content
-                );
-
-                return sanitized
-                    .replace(/[<>]/g, '')
-                    .replace(/javascript:/gi, '')
-                    .replace(/data:/gi, '')
-                    .replace(/vbscript:/gi, '')
-                    .replace(/on\w+=/gi, '');
-            }
-            /**
-             * Validate a URL
-             * @param {string} url - The URL to validate
-             * @returns {boolean} Whether the URL is valid
-             */
-            validateUrl(url) {
-                if (!url) return false;
-
-                try {
-                    const urlObj = new URL(url);
-                    // Check protocol
-                    if (!['http:', 'https:'].includes(urlObj.protocol)) {
-                        return false;
-                    }
-
-                    // Check for XSS in URL
-                    if (SECURITY_CONFIG.patterns.xss.patterns.some(pattern =>
-                        pattern.test(decodeURIComponent(url)))) {
-                        return false;
-                    }
-
-                    return true;
-                } catch {
-                    return false;
-                }
-            }
-            /**
-             * Protect an element
-             * @param {Element} element - The element to protect
-             * @param {object} options - The options for protection
-             */
-            protectElement(element, options = {}) {
-                const config = {
-                    allowHtml: false,
-                    allowUrls: false,
-                    urlWhitelist: [],
-                    ...options
-                };
-
-                this.protectedElements.set(element, config);
-
-                // Override innerHTML setter
-                const originalInnerHTML = Object.getOwnPropertyDescriptor(
-                    Element.prototype,
-                    'innerHTML'
-                );
-
-                Object.defineProperty(element, 'innerHTML', {
-                    set: (content) => {
-                        const sanitized = config.allowHtml ?
-                            this.sanitizeHtml(content) :
-                            this.sanitizeContent(content);
-                        originalInnerHTML.set.call(element, sanitized);
-                    },
-                    get: originalInnerHTML.get
-                });
-
-                // Monitor attribute changes
-                const observer = new MutationObserver((mutations) => {
-                    mutations.forEach((mutation) => {
-                        if (mutation.type === 'attributes') {
-                            this.validateAttribute(element, mutation.attributeName);
-                        }
-                    });
-                });
-
-                observer.observe(element, {
-                    attributes: true
-                });
-            }
-            /**
-             * Validate an attribute
-             * @param {Element} element - The element to validate
-             * @param {string} attrName - The attribute name to validate
-             */
-            validateAttribute(element, attrName) {
-                const value = element.getAttribute(attrName);
-
-                // Check for dangerous attributes
-                if (/^on/i.test(attrName)) {
-                    element.removeAttribute(attrName);
-                    this.reportViolation('eventHandler', { element, attribute: attrName });
-                    return;
-                }
-
-                // Check URLs in attributes
-                if (['src', 'href', 'action', 'formaction'].includes(attrName)) {
-                    if (!this.validateUrl(value)) {
-                        element.removeAttribute(attrName);
-                        this.reportViolation('unsafeUrl', { element, attribute: attrName, value });
-                    }
-                }
-            }
-            /**
-             * Sanitize HTML
-             * @param {string} html - The HTML content to sanitize
-             * @returns {string} The sanitized HTML content
-             */
-            sanitizeHtml(html) {
-                const doc = new DOMParser().parseFromString(html, 'text/html');
-                const safe = this.sanitizeNode(doc.body);
-                return safe.innerHTML;
-            }
-            /**
-             * Sanitize a node
-             * @param {Node} node - The node to sanitize
-             * @returns {Node} The sanitized node
-             */
-            sanitizeNode(node) {
-                const allowedTags = ['p', 'b', 'i', 'u', 'strong', 'em', 'span', 'div', 'a'];
-                const allowedAttrs = ['href', 'class', 'id', 'title'];
-
-                const clean = document.createElement(
-                    allowedTags.includes(node.tagName.toLowerCase()) ?
-                        node.tagName.toLowerCase() :
-                        'span'
-                );
-
-                // Copy allowed attributes
-                Array.from(node.attributes).forEach(attr => {
-                    if (allowedAttrs.includes(attr.name)) {
-                        if (attr.name === 'href') {
-                            if (this.validateUrl(attr.value)) {
-                                clean.setAttribute(attr.name, attr.value);
-                            }
-                        } else {
-                            clean.setAttribute(attr.name, attr.value);
-                        }
-                    }
-                });
-
-                // Recursively clean child nodes
-                Array.from(node.childNodes).forEach(child => {
-                    if (child.nodeType === Node.TEXT_NODE) {
-                        clean.appendChild(document.createTextNode(child.textContent));
-                    } else if (child.nodeType === Node.ELEMENT_NODE) {
-                        clean.appendChild(this.sanitizeNode(child));
-                    }
-                });
-
-                return clean;
-            }
-            /**
-             * Report a violation
-             * @param {string} type - The type of violation
-             * @param {object} details - The details of the violation
-             */
-            reportViolation(type, details) {
-                const event = new CustomEvent('formtress:violation', {
-                    detail: {
-                        type,
-                        timestamp: new Date(),
-                        ...details
-                    }
-                });
-                document.dispatchEvent(event);
-            }
-        }
+        
         class SanitizationConfig {
             constructor(options = {}) {
                 this.tags = {
@@ -3027,6 +2967,150 @@
                 return result;
             }
         }
+        class CSPGenerator {
+            constructor() {
+                this.isDevelopment = isDevelopment;
+                this.nonce = generateNonce();
+                this.sources = {
+                    'default-src': new Set(["'self'"]),
+                    'script-src': new Set(["'self'"]),
+                    'style-src': new Set(["'self'"]),
+                    'img-src': new Set(["'self'"]),
+                    'connect-src': new Set(["'self'"]),
+                    'font-src': new Set(["'self'"]),
+                    'frame-src': new Set(["'none'"]),
+                    'object-src': new Set(["'none'"]),
+                    'base-uri': new Set(["'self'"]),
+                    'form-action': new Set(["'self'"]),
+                };
+            }
+            applyCSP() {
+                const { directives, nonce } = this.generateCSP();
+                
+                // Return the generated CSP directives
+                return directives;
+            }
+            generateCSP() {
+                this.detectFrameworks();
+                this.analyzeDOM();
+
+                // Add environment-specific rules
+                if (this.isDevelopment) {
+                    // Development: Allow unsafe rules for better DX
+                    this.sources['script-src']
+                        .add("'unsafe-eval'")
+                        .add("'unsafe-inline'")
+                        .add("http://localhost");
+                    this.sources['style-src'] = new Set([
+                            "'self'",
+                            `'nonce-${this.nonce}'`
+                        ]);
+                } else {
+                    // Production: Strict CSP with nonces
+                    this.sources['script-src']
+                        .add(`'nonce-${this.nonce}'`)
+                        .add("'strict-dynamic'");
+                    this.sources['style-src'] = new Set([
+                        "'self'",
+                        "'unsafe-inline'"
+                    ]);
+                }
+
+                // Convert Sets to Arrays and build CSP
+                const csp = {};
+                for (const [directive, sources] of Object.entries(this.sources)) {
+                    if (sources.size > 0) {
+                        csp[directive] = Array.from(sources);
+                    }
+                }
+
+                return {
+                    directives: csp,
+                    nonce: this.nonce
+                };
+            }
+
+            detectFrameworks() {
+                // React
+                if (window.React || document.querySelector('[data-reactroot]')) {
+                    if (this.isDevelopment) {
+                        this.sources['script-src'].add("'unsafe-eval'");
+                    }
+                }
+
+                // Vue
+                if (window.Vue || document.querySelector('[data-v-]')) {
+                    if (this.isDevelopment) {
+                        this.sources['style-src'].add("'unsafe-inline'");
+                    }
+                }
+
+                // Angular
+                if (window.angular || document.querySelector('[ng-]')) {
+                    if (this.isDevelopment) {
+                        this.sources['script-src'].add("'unsafe-eval'");
+                    }
+                }
+            }
+
+            analyzeDOM() {
+                // Scripts
+                document.querySelectorAll('script').forEach(script => {
+                    if (script.src) {
+                        this.sources['script-src'].add(new URL(script.src).origin);
+                    }
+                });
+
+                // Styles
+                document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+                    if (link.href) {
+                        this.sources['style-src'].add(new URL(link.href).origin);
+                    }
+                });
+
+                // Images
+                document.querySelectorAll('img').forEach(img => {
+                    if (img.src) {
+                        try {
+                            const origin = new URL(img.src).origin;
+                            this.sources['img-src'].add(origin);
+                        } catch (e) {
+                            if (img.src.startsWith('data:')) {
+                                this.sources['img-src'].add('data:');
+                            }
+                        }
+                    }
+                });
+
+                // Fonts
+                document.querySelectorAll('link[rel="font"]').forEach(font => {
+                    if (font.href) {
+                        this.sources['font-src'].add(new URL(font.href).origin);
+                    }
+                });
+
+                return this.sources;
+            }
+        }
+        // Usage in Formtress initialization
+        const initializeAutoCSP = () => {
+            const cspGenerator = new CSPGenerator();
+            const csp = cspGenerator.applyCSP();
+            
+            // Log generated CSP in development
+            if (isDevelopment) {
+                console.log('Generated CSP:', csp);
+            }
+            
+            return csp;
+        };
+        
+        const generateNonce = () => {
+            // Generate a random nonce for CSP
+            const array = new Uint8Array(16);
+            crypto.getRandomValues(array);
+            return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
         /**
          * CSP Core
          */
@@ -3046,20 +3130,20 @@
                         Object.entries(config.directives).map(([key, value]) => [key, [...value]])
                     )
                 };
-
-                this.nonce = this.generateNonce();
+                this.nonce = generateNonce();
+                if (config.autoGenerate) {
+                    const generatedCSP = initializeAutoCSP();
+                    this.config.directives = generatedCSP;
+                }
+                this.nonce = generateNonce();
 
                 if (this.config.enabled) {
                     this.applyCSP();
                     this.updateExistingScripts();
                 }
             }
-
-            generateNonce() {
-                // Generate a random nonce for CSP
-                const array = new Uint8Array(16);
-                crypto.getRandomValues(array);
-                return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+            getNonce() {
+                return this.nonce;  // Return the same nonce consistently
             }
 
             buildCSPString() {
@@ -3216,7 +3300,7 @@
                                 if (node.nodeName === 'FORM' && !node.dataset.formtressSecured) {
                                     this.secureForm(node);
                                 }
-                                node.querySelectorAll('form:not([data-formtress-secured])')
+                                node.querySelectorAll(`form:not([${randomFormFlagId}])`)
                                     .forEach(form => this.secureForm(form));
                             }
                         });
@@ -3233,8 +3317,17 @@
              * Secure existing forms
              */
             secureExistingForms() {
-                document.querySelectorAll('form:not([data-formtress-secured])')
-                    .forEach(form => this.secureForm(form));
+                console.log('Formtress: Secure existing forms with random flag id:', randomFormFlagId);
+                //check if the document is ready, if so, secure all forms
+                const checkAndSecureForms = () => {
+                    if (document.readyState === 'complete') {
+                        document.querySelectorAll(`form:not([${randomFormFlagId}])`)
+                            .forEach(form => this.secureForm(form));
+                    } else {
+                        setTimeout(checkAndSecureForms, 1); //check every 1ms until the document is ready
+                    }
+                };
+                checkAndSecureForms();
             }
 
             /**
@@ -3896,23 +3989,7 @@
             // Version info
             version: '0.1.0',
             // Add DOM protection utility methods
-            dom: {
-                protectElement: (element, options) => {
-                    const protector = new DOMProtector(SECURITY_CONFIG);
-                    return protector.protectElement(element, options);
-                },
-                sanitize: (content) => {
-                    const protector = new DOMProtector(SECURITY_CONFIG);
-                    return protector.sanitizeContent(content);
-                },
-                sanitizeHtml: (content) => {
-                    const protector = new DOMProtector(SECURITY_CONFIG);
-                    return protector.sanitizeHtml(content);
-                },
-                validateUrl: (url) => {
-                    const protector = new DOMProtector(SECURITY_CONFIG);
-                    return protector.validateUrl(url);
-                },
+            dom: {                
                 /**
                  * Content sanitization methods
                  * Example:
