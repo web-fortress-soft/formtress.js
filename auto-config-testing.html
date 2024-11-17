@@ -2,23 +2,75 @@
 <html lang="en">
     <!-- Configuration Bootstrap -->
     <script id="formtress-bootstrap" type="text/javascript">
-        window.FormtressConfig = Object.freeze({
-            security: {
+        const FormtressConfig = Object.freeze({
+            rateLimit: {
                 enabled: true,
+                windowMs: 60000,     // 1 minute
+                maxAttempts: 5,      // 5 attempts per minute
+                blockDuration: 300000 // 5 minutes block
+            },
+            testForm: {
+                rateLimit: {
+                    enabled: true,
+                    windowMs: 60000,     // 1 minute
+                    maxAttempts: 5,      // 5 attempts per minute
+                    blockDuration: 300000 // 5 minutes block
+                },
+                validation: {
+                    debounce: 300,
+                    async: true
+                },
+                fields: {
+                    username: {
+                        validateTriggers: ['blur'],
+                        required: true,
+                        requiredMessage: 'Username is required',
+                        debounce: 300,
+                        min: 3,
+                        minMessage: 'Username must be at least 3 characters long',
+                        max: 20,
+                        maxMessage: 'Username must be less than 20 characters long',
+                        pattern: '^[a-zA-Z0-9]+$',
+                        patternMessage: 'Username must contain only letters and numbers'
+                    },
+                    email: {
+                        validateTriggers: ['blur'],
+                        required: true,
+                        requiredMessage: 'Email is required',
+                        debounce: 300,
+                        type: 'email',
+                        emailMessage: 'Invalid email address',
+                        pattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                        patternMessage: 'Invalid email address'
+                    }
+                }
+            },
+            security: {
+                level: 'high',
+                enabled: false,
+                refreshValidators: false,
                 patterns: {
+                    endpoint: './api/security/patterns.php',
+                    validateEndpoint: './api/security/validate.php',
                     xss: { enabled: true },
                     sql: { enabled: true },
                     command: { enabled: true },
                     prototyping: { enabled: true }
                 },
                 rateLimit: {
-                    enabled: true,
+                    enabled: false,
                     windowMs: 60000,
                     max: 5
                 },
                 csrf: {
+                    enabled: true,
+                    endpoint: './api/security/csrf.php',
+                    fieldName: '_csrf',
+                    method: 'GET'
+                },
+                cloudflare: {
                     enabled: false,
-                    fieldName: '_csrf'
+                    trustProxy: true
                 }
             },
             csp: {
@@ -29,7 +81,7 @@
                     'script-src': ["'self'", "'strict-dynamic'"],
                     'style-src': ["'self'", "'unsafe-inline'"],
                     'img-src': ["'self'", 'data:', 'https:'],
-                    'connect-src': ["'self'"],
+                    'connect-src': ["'self'", "*.cloudflare.com"],
                     'base-uri': ["'self'"],
                     'form-action': ["'self'"],
                     'object-src': ["'none'"]
@@ -38,10 +90,10 @@
             validation: {
                 debounce: 300,
                 async: true
-            }
+            },
         });
     </script>
-    <script src="src/js/formtress.js" defer></script>
+    <script src="src/js/formtress.js"></script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -110,9 +162,10 @@
                 const formResult = document.getElementById('formResult');
                 formResult.textContent = 'Form submitted with auto-config settings';
             });
-
+            const button = document.getElementById('runTestsButton');
             // Test runner
-            document.getElementById('runTestsButton').addEventListener('click', () => {
+            button.addEventListener('click', () => {
+                console.log('runTestsButton clicked');
                 const results = [];
                 const testResults = document.getElementById('testResults');
 
